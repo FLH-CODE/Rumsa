@@ -363,6 +363,13 @@ a {
   height: 100% !important;
 }
 
+.viewer-main .react-transform-wrapper {
+  /* Annars tävlar webbläsarens egna pinch-zoom-sida/panorering med bibliotekets egen
+     gesthantering, vilket kändes hoppigt på styrplatta/pekskärm. */
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
 .viewer-nav-btn {
   position: absolute;
   top: 50%;

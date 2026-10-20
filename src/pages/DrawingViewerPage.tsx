@@ -118,7 +118,16 @@ export default function DrawingViewerPage() {
             </button>
           )}
           {doc && (
-            <TransformWrapper key={currentPage.id} minScale={0.5} maxScale={8} centerOnInit>
+            <TransformWrapper
+              key={currentPage.id}
+              minScale={0.5}
+              maxScale={8}
+              centerOnInit
+              // Annars zoomar varje scrollrörelse (mus-hjul eller styrplatta) i stället för att panorera,
+              // vilket kändes hoppigt/förvirrande. Nu panorerar vanlig scroll, och pinch/ctrl+scroll zoomar.
+              wheel={{ wheelDisabled: true }}
+              trackPadPanning={{ disabled: false }}
+            >
               <TransformComponent>
                 <PdfPageCanvas doc={doc} pageIndex={currentPage.pageIndex} />
               </TransformComponent>
