@@ -228,3 +228,171 @@ a {
   justify-content: center;
   box-shadow: 0 6px 16px rgba(22, 78, 99, 0.35);
 }
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.drawing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.drawing-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Ritningsvisare --- */
+
+.viewer-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1b1f20;
+  color: #fff;
+}
+
+.viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right)) 10px calc(10px + var(--safe-left));
+  background: var(--color-primary);
+  z-index: 5;
+}
+
+.viewer-header-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.viewer-level-name {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  width: 100%;
+  max-width: 220px;
+}
+
+.viewer-level-name:focus {
+  outline: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+}
+
+.viewer-page-count {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.viewer-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.viewer-sidebar {
+  width: 112px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: #0f1213;
+  transition: width 0.15s ease, opacity 0.15s ease;
+  padding-bottom: var(--safe-bottom);
+}
+
+.viewer-sidebar.collapsed {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.viewer-thumb {
+  width: 100%;
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.viewer-thumb img {
+  width: 100%;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  display: block;
+}
+
+.viewer-thumb.active img {
+  border-color: #fff;
+}
+
+.viewer-thumb-label {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+}
+
+.viewer-main {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: #2a2e2f;
+}
+
+.viewer-main .react-transform-wrapper,
+.viewer-main .react-transform-component {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.viewer-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.viewer-nav-btn.prev {
+  left: 10px;
+}
+
+.viewer-nav-btn.next {
+  right: 10px;
+}
+
+.viewer-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 24px;
+  text-align: center;
+}

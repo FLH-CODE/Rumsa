@@ -3,3 +3,6 @@ dist
 dist-ssr
 *.local
 .DS_Store
+
+# Repot är publikt – ritningar/PDF:er ska aldrig committas (de lagras lokalt i IndexedDB i appen).
+*.pdf
