@@ -4,8 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import { db, createId, type DrawingPage, type Level, type Room } from '../db'
 import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
+import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
-import { PdfPageCanvas } from '../features/pdf/PdfPageCanvas'
+import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
@@ -21,6 +22,8 @@ export default function DrawingViewerPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [zoomScale, setZoomScale] = useState(1)
+  const [mainRef, mainSize] = useElementSize<HTMLDivElement>()
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -73,6 +76,7 @@ export default function DrawingViewerPage() {
   }
 
   function goTo(pageId: string) {
+    setZoomScale(1)
     navigate(`/project/${projectId}/viewer/${pageId}`, { replace: true })
   }
 
@@ -125,7 +129,7 @@ export default function DrawingViewerPage() {
           ))}
         </aside>
 
-        <div className="viewer-main">
+        <div className="viewer-main" ref={mainRef}>
           {currentIndex > 0 && (
             <button className="viewer-nav-btn prev tap-target" onClick={goPrev} aria-label="Föregående sida">
               ‹
@@ -136,21 +140,26 @@ export default function DrawingViewerPage() {
               ›
             </button>
           )}
-          {doc && (
+          {doc && mainSize && (
             <TransformWrapper
               key={currentPage.id}
-              minScale={0.5}
-              maxScale={8}
+              // Skala 1 = ritningen anpassad efter tillgängligt utrymme (se PdfPageCanvas), så
+              // man alltid kan zooma ut till hela sidan och zooma in utan att det pixelerar.
+              minScale={0.3}
+              maxScale={PDF_MAX_ZOOM}
               centerOnInit
               // Annars zoomar varje scrollrörelse (mus-hjul eller styrplatta) i stället för att panorera,
               // vilket kändes hoppigt/förvirrande. Nu panorerar vanlig scroll, och pinch/ctrl+scroll zoomar.
               wheel={{ wheelDisabled: true }}
               trackPadPanning={{ disabled: false }}
+              onTransform={(_, state) => setZoomScale(state.scale)}
             >
               <TransformComponent>
                 <PdfPageCanvas
                   doc={doc}
                   pageIndex={currentPage.pageIndex}
+                  containerSize={mainSize}
+                  zoomScale={zoomScale}
                   rooms={rooms ?? []}
                   onRoomTap={setSelectedRoom}
                 />

@@ -173,6 +173,21 @@ a {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* På bredare skärmar (surfplatta liggande/dator) känns en botten-anchored sheet malplacerad –
+   visa den som en centrerad dialog istället, som på mobilt är det tummen når bäst. */
+@media (min-width: 640px) {
+  .modal-backdrop {
+    align-items: center;
+  }
+
+  .modal-sheet {
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
 }
 
 .field {

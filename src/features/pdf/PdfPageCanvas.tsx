@@ -1,26 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import type { Room } from '../../db'
+import type { ElementSize } from '../../hooks/useElementSize'
+
+/** Hur mycket extra upplösning (utöver skärmens pixeltäthet) som renderas utöver fit-to-screen,
+ * så att man kan zooma in en bit innan bilden börjar bli suddig/pixelerad. */
+const BASE_SHARPNESS = 2.5
+/** Skyddar mot canvas-storleksgränser på vissa mobila webbläsare (t.ex. iOS Safari). */
+const MAX_BACKING_DIMENSION = 4096
+
+/** Hur långt man kan zooma in bortom fit-to-screen (scale 1) innan skärpan tar slut. Matchar BASE_SHARPNESS. */
+export const PDF_MAX_ZOOM = BASE_SHARPNESS
 
 export function PdfPageCanvas({
   doc,
   pageIndex,
-  scale = 2,
+  containerSize,
+  zoomScale = 1,
   rooms = [],
   onRoomTap,
 }: {
   doc: PDFDocumentProxy
   pageIndex: number
-  scale?: number
+  /** Tillgängligt utrymme att fylla vid zoom-skala 1 (fit-to-screen). */
+  containerSize: ElementSize | null
+  /** Aktuell zoom-skala från TransformWrapper, används för att hålla rumstaggarnas storlek konstant på skärmen. */
+  zoomScale?: number
   rooms?: Room[]
   onRoomTap?: (room: Room) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  // Taggad med pageIndex/scale så en viewport från en tidigare sida aldrig används för hotspot-positioner
-  // när props hunnit ändras innan renderingen var klar.
-  const [rendered, setRendered] = useState<{ pageIndex: number; scale: number; viewport: PageViewport } | null>(
-    null,
-  )
+  // Taggad med pageIndex så en viewport från en tidigare sida aldrig används för hotspot-positioner
+  // när props hunnit ändras innan renderingen var klar. displayViewport matchar canvasens CSS-storlek
+  // (fit-to-screen-skala), inte dess högupplösta backing store.
+  const [rendered, setRendered] = useState<{ pageIndex: number; displayViewport: PageViewport } | null>(null)
 
   useEffect(() => {
     let renderTask: RenderTask | null = null
@@ -30,14 +43,32 @@ export function PdfPageCanvas({
       if (cancelled) return
       const canvas = canvasRef.current
       if (!canvas) return
-      const pageViewport = page.getViewport({ scale })
-      canvas.width = pageViewport.width
-      canvas.height = pageViewport.height
+
+      const natural = page.getViewport({ scale: 1 })
+      const fitScale = containerSize
+        ? Math.min(containerSize.width / natural.width, containerSize.height / natural.height)
+        : 1
+      const dpr = window.devicePixelRatio || 1
+      let renderScale = fitScale * dpr * BASE_SHARPNESS
+
+      const maxBackingDim = Math.max(natural.width, natural.height) * renderScale
+      if (maxBackingDim > MAX_BACKING_DIMENSION) {
+        renderScale *= MAX_BACKING_DIMENSION / maxBackingDim
+      }
+
+      const renderViewport = page.getViewport({ scale: renderScale })
+      const displayViewport = page.getViewport({ scale: fitScale })
+
+      canvas.width = Math.ceil(renderViewport.width)
+      canvas.height = Math.ceil(renderViewport.height)
+      canvas.style.width = `${displayViewport.width}px`
+      canvas.style.height = `${displayViewport.height}px`
+
       const canvasContext = canvas.getContext('2d')!
-      renderTask = page.render({ canvasContext, viewport: pageViewport, canvas })
+      renderTask = page.render({ canvasContext, viewport: renderViewport, canvas })
       renderTask.promise
         .then(() => {
-          if (!cancelled) setRendered({ pageIndex, scale, viewport: pageViewport })
+          if (!cancelled) setRendered({ pageIndex, displayViewport })
         })
         .catch(() => {
           /* avbruten rendering vid snabb sidbyte – inget fel att visa */
@@ -48,9 +79,13 @@ export function PdfPageCanvas({
       cancelled = true
       renderTask?.cancel()
     }
-  }, [doc, pageIndex, scale])
+    // Jämför bredd/höjd, inte objektreferensen, som annars triggar om på varje ResizeObserver-tick
+    // även när storleken inte faktiskt ändrats.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, pageIndex, containerSize?.width, containerSize?.height])
 
-  const viewport = rendered?.pageIndex === pageIndex && rendered.scale === scale ? rendered.viewport : null
+  const viewport = rendered?.pageIndex === pageIndex ? rendered.displayViewport : null
+  const hotspotScale = 1 / zoomScale
 
   return (
     <div className="pdf-page-stage">
@@ -62,7 +97,7 @@ export function PdfPageCanvas({
             <button
               key={room.id}
               className="room-hotspot"
-              style={{ left: x, top: y }}
+              style={{ left: x, top: y, transform: `scale(${hotspotScale})` }}
               onClick={() => onRoomTap?.(room)}
               aria-label={`${room.roomName} ${room.roomNumber}`}
             />
