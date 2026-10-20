@@ -2,6 +2,7 @@ import { pdfjsLib } from '../../pdf/pdfjsSetup'
 import { db, createId, type DrawingPage, type Level } from '../../db'
 import { detectLevelLabel } from './detectLevelLabel'
 import { renderThumbnail } from './renderThumbnail'
+import { syncRoomsForPage } from './syncRooms'
 
 /**
  * Läser in en PDF (enkel sida eller buntad), skapar en Drawing + en DrawingPage per sida,
@@ -25,6 +26,9 @@ export async function importDrawingFile(projectId: string, file: File): Promise<
     uploadedAt: Date.now(),
   })
 
+  const project = await db.projects.get(projectId)
+  const roomNumberPattern = project?.roomNumberPattern ?? '^\\d{3,4}$'
+
   const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
   const levelByName = new Map(existingLevels.map((level) => [level.name, level]))
 
@@ -46,6 +50,7 @@ export async function importDrawingFile(projectId: string, file: File): Promise<
       thumbnailDataUrl,
     }
     await db.drawingPages.add(drawingPage)
+    await syncRoomsForPage(page, drawingPage, roomNumberPattern)
   }
 
   return drawingId

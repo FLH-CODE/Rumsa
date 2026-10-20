@@ -167,6 +167,7 @@ a {
   width: 100%;
   max-width: 480px;
   background: var(--color-surface);
+  color: var(--color-text);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 20px 16px calc(20px + var(--safe-bottom));
   display: flex;
@@ -368,6 +369,52 @@ a {
      gesthantering, vilket kändes hoppigt på styrplatta/pekskärm. */
   touch-action: none;
   overscroll-behavior: contain;
+}
+
+.pdf-page-stage {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.room-hotspot {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  margin-top: -16px;
+  border-radius: 50%;
+  background: rgba(239, 163, 15, 0.4);
+  border: 2px solid #efa30f;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+
+.room-hotspot:active {
+  background: rgba(239, 163, 15, 0.7);
+}
+
+.room-sheet-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.room-sheet-row:last-child {
+  border-bottom: none;
+}
+
+.detect-rooms-btn {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + var(--safe-bottom));
+  transform: translateX(-50%);
+  z-index: 4;
+  font-size: 0.8rem;
+  padding: 8px 14px;
+  min-height: 36px;
+  opacity: 0.9;
 }
 
 .viewer-nav-btn {

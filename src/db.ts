@@ -38,7 +38,7 @@ export interface DrawingPage {
 export interface Room {
   id: string
   projectId: string
-  levelId: string
+  levelId: string | null
   drawingPageId: string
   roomNumber: string
   roomName: string

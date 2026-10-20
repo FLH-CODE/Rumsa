@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
-import { db, createId, type DrawingPage, type Level } from '../db'
+import { db, createId, type DrawingPage, type Level, type Room } from '../db'
 import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas } from '../features/pdf/PdfPageCanvas'
+import { syncRoomsForPage } from '../features/pdf/syncRooms'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -18,6 +19,8 @@ export default function DrawingViewerPage() {
   const { projectId, drawingPageId } = useParams<{ projectId: string; drawingPageId: string }>()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  const [detecting, setDetecting] = useState(false)
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -31,6 +34,22 @@ export default function DrawingViewerPage() {
   const currentIndex = sortedPages.findIndex((p) => p.id === drawingPageId)
   const currentPage = currentIndex >= 0 ? sortedPages[currentIndex] : null
   const { doc } = usePdfDocument(currentPage?.drawingId ?? null)
+  const rooms = useLiveQuery(
+    () => (currentPage ? db.rooms.where('drawingPageId').equals(currentPage.id).toArray() : []),
+    [currentPage?.id],
+  )
+
+  const handleDetectRooms = async () => {
+    if (!doc || !currentPage || !projectId) return
+    setDetecting(true)
+    try {
+      const project = await db.projects.get(projectId)
+      const page = await doc.getPage(currentPage.pageIndex + 1)
+      await syncRoomsForPage(page, currentPage, project?.roomNumberPattern ?? '^\\d{3,4}$')
+    } finally {
+      setDetecting(false)
+    }
+  }
 
   if (pages === undefined || levels === undefined) {
     return (
@@ -129,10 +148,39 @@ export default function DrawingViewerPage() {
               trackPadPanning={{ disabled: false }}
             >
               <TransformComponent>
-                <PdfPageCanvas doc={doc} pageIndex={currentPage.pageIndex} />
+                <PdfPageCanvas
+                  doc={doc}
+                  pageIndex={currentPage.pageIndex}
+                  rooms={rooms ?? []}
+                  onRoomTap={setSelectedRoom}
+                />
               </TransformComponent>
             </TransformWrapper>
           )}
+          <button className="btn btn-secondary detect-rooms-btn" onClick={handleDetectRooms} disabled={detecting}>
+            {detecting ? 'Letar rum…' : `Hitta rum (${rooms?.length ?? 0})`}
+          </button>
+        </div>
+      </div>
+
+      {selectedRoom && <RoomSheet room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
+    </div>
+  )
+}
+
+function RoomSheet({ room, onClose }: { room: Room; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="room-sheet-row">
+          <strong>Rum {room.roomNumber}</strong>
+          <span>{room.roomName}</span>
+        </div>
+        <p className="field-hint">Inventeringsformulär kommer i nästa fas.</p>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onClose}>
+            Stäng
+          </button>
         </div>
       </div>
     </div>
