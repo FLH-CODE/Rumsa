@@ -12,7 +12,7 @@
   "dependencies": {
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
-    "pdfjs-dist": "^6.4.299",
+    "pdfjs-dist": "5.4.624",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",

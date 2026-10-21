@@ -124,11 +124,13 @@ export default function DrawingViewerPage() {
   if (sortedPages.length === 0 || !currentPage) {
     return (
       <div className="viewer-page">
-        <header className="viewer-header">
-          <button className="btn btn-ghost tap-target" onClick={() => navigate(`/project/${projectId}`)}>
-            ← Projekt
-          </button>
-        </header>
+        <button
+          className="viewer-float-btn back"
+          onClick={() => navigate(`/project/${projectId}`)}
+          aria-label="Tillbaka till projekt"
+        >
+          ✕
+        </button>
         <div className="viewer-empty">Ritningen kunde inte hittas.</div>
       </div>
     )
@@ -144,28 +146,30 @@ export default function DrawingViewerPage() {
 
   return (
     <div className="viewer-page">
-      <header className="viewer-header">
+      {/* Inga sammanhängande verktygsfält – varje kontroll är sin egen flytande knapp direkt
+         ovanpå ritningen, så den aldrig tar permanent plats eller känns som en app-bar. */}
+      <button
+        className="viewer-float-btn back"
+        onClick={() => navigate(`/project/${projectId}`)}
+        aria-label="Tillbaka till projekt"
+      >
+        ✕
+      </button>
+      <div className="viewer-level-pill">
+        <LevelNameEditor
+          key={currentPage.id}
+          projectId={projectId!}
+          drawingPage={currentPage}
+          level={currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null}
+        />
+        <span className="viewer-page-count">
+          Sida {currentIndex + 1} av {sortedPages.length}
+          {rooms && rooms.length > 0 && ` · ${completedRoomIds.size}/${rooms.length} rum klara`}
+        </span>
+      </div>
+      <div className="viewer-float-group top-right">
         <button
-          className="btn btn-ghost tap-target"
-          onClick={() => navigate(`/project/${projectId}`)}
-          aria-label="Tillbaka till projekt"
-        >
-          ✕
-        </button>
-        <div className="viewer-header-title">
-          <LevelNameEditor
-            key={currentPage.id}
-            projectId={projectId!}
-            drawingPage={currentPage}
-            level={currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null}
-          />
-          <span className="viewer-page-count">
-            Sida {currentIndex + 1} av {sortedPages.length}
-            {rooms && rooms.length > 0 && ` · ${completedRoomIds.size}/${rooms.length} rum klara`}
-          </span>
-        </div>
-        <button
-          className="btn btn-ghost tap-target"
+          className="viewer-float-btn"
           onClick={() => setFilterSheetOpen(true)}
           aria-label={filterTag ? `Färgfilter: ${filterTag.code}` : 'Färglägg efter materialtagg'}
         >
@@ -173,20 +177,20 @@ export default function DrawingViewerPage() {
           {filterTag && <span className="viewer-filter-dot" style={{ background: colorForValue(filterTag.code) }} />}
         </button>
         <button
-          className="btn btn-ghost tap-target"
+          className="viewer-float-btn"
           onClick={() => setShowTagsOverview(true)}
           aria-label="Materialtaggar"
         >
           <TagIcon width={20} height={20} />
         </button>
         <button
-          className="btn btn-ghost tap-target"
+          className="viewer-float-btn"
           onClick={() => setSidebarOpen((open) => !open)}
           aria-label="Visa/dölj sidor"
         >
           ▤
         </button>
-      </header>
+      </div>
 
       <div className="viewer-body">
         <aside className={`viewer-sidebar${sidebarOpen ? '' : ' collapsed'}`}>
