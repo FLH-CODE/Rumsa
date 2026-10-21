@@ -239,6 +239,20 @@ textarea:focus-visible {
   z-index: 100;
 }
 
+/* Taggöversikten renderas alltid som en fristående overlay (aldrig bara "på plats" i ett
+   flödeslayout) – det gör att den funkar likadant som en egen sida (route) och som ett lager
+   ovanpå ritningsvisaren eller ett öppet rumskort, utan att det underliggande tappar sitt
+   tillstånd (zoom, osparad text) när den öppnas och stängs. */
+.tags-overview {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 .modal-sheet {
   width: 100%;
   max-width: 480px;
@@ -404,6 +418,7 @@ textarea:focus-visible {
 .viewer-level-name:focus {
   outline: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 4px;
+  box-shadow: none;
 }
 
 .viewer-page-count {
@@ -523,6 +538,17 @@ textarea:focus-visible {
   background: var(--color-success-dark);
 }
 
+/* Färgfilter (via headerns filterknapp): rum med vald tagg lyfts fram i taggens egen färg,
+   övriga tonas ner – man ser direkt var en viss materialtyp sitter utan att öppna varje rum. */
+.room-hotspot.filter-match {
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+
+.room-hotspot.filter-dim {
+  opacity: 0.25;
+}
+
 .viewer-toolbar {
   position: absolute;
   left: 50%;
@@ -615,8 +641,9 @@ textarea:focus-visible {
 
 .inventory-room-number:focus,
 .inventory-room-name:focus {
-  border-bottom-color: var(--color-border);
+  border-bottom-color: var(--color-primary);
   outline: none;
+  box-shadow: none;
 }
 
 .inventory-room-number {
@@ -663,6 +690,12 @@ textarea:focus-visible {
   border-bottom: 1px dashed var(--color-border);
 }
 
+.inventory-surface-name:focus {
+  outline: none;
+  box-shadow: none;
+  border-bottom: 1px solid var(--color-primary);
+}
+
 .inventory-remove-row {
   color: var(--color-text-muted);
   font-size: 1rem;
@@ -689,6 +722,13 @@ textarea:focus-visible {
   background: var(--color-surface);
 }
 
+/* Fokusringen hamnar på hela pillret istället för en skarpkantig box runt själva
+   textfältet, som annars sprack ur den rundade ytan och såg trasigt ut. */
+.material-autocomplete-field:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(22, 78, 99, 0.18);
+}
+
 .material-autocomplete-field input {
   flex: 1;
   border: none;
@@ -696,6 +736,11 @@ textarea:focus-visible {
   min-height: 44px;
   font-size: 1rem;
   background: transparent;
+}
+
+.material-autocomplete-field input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .material-color-dot {
@@ -755,13 +800,27 @@ textarea:focus-visible {
 
 .material-ref-chip {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  align-items: stretch;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
+}
+
+/* Hela chippen utom ta-bort-knappen är klickbar – tryck för att ändra tagg/notering i efterhand
+   (t.ex. om man la till materialet utan notering första gången). */
+.material-ref-chip-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 6px 10px 10px;
+  text-align: left;
+}
+
+.material-ref-chip-main:active {
+  background: var(--color-bg);
 }
 
 .material-ref-chip strong {
@@ -779,7 +838,8 @@ textarea:focus-visible {
 
 .material-ref-remove {
   flex-shrink: 0;
-  margin-left: auto;
+  align-self: center;
+  margin-right: 6px;
   color: var(--color-text-muted);
   border-radius: 50%;
   width: 28px;
@@ -823,6 +883,43 @@ textarea:focus-visible {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.tag-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.tag-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.tag-filter-option.active {
+  background: var(--color-bg);
+  font-weight: 600;
+}
+
+.viewer-header .btn-ghost {
+  position: relative;
+}
+
+.viewer-filter-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-primary);
 }
 
 /* --- Taggchip (fristående, t.ex. i framtida sammanhang) --- */
@@ -892,11 +989,18 @@ textarea:focus-visible {
   min-width: 0;
   background: transparent;
   border: none;
+  border-radius: 6px;
   color: var(--color-primary-contrast);
   font-size: 1.05rem;
   font-weight: 600;
   text-align: center;
   padding: 6px 4px;
+}
+
+.header-title-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .header-title-input::placeholder {

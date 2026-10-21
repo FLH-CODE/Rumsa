@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate } from 'react-router-dom'
 import { db, createId, type InventoryRow, type MaterialReference, type Room } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { RivningInput } from './RivningInput'
 import { MaterialReferenceEditor } from '../tags/MaterialReferenceEditor'
+import { TagsOverviewPanel } from '../tags/TagsOverviewPanel'
 import { deleteRoomCascade } from '../data/cascadeDelete'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
@@ -24,8 +24,8 @@ export function RoomInventorySheet({
   projectId: string
   onClose: () => void
 }) {
-  const navigate = useNavigate()
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [showTags, setShowTags] = useState(false)
 
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
@@ -189,13 +189,7 @@ export function RoomInventorySheet({
           <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
             Ta bort rum
           </button>
-          <button
-            className="btn btn-ghost-light"
-            onClick={() => {
-              void handleClose()
-              navigate(`/project/${projectId}/tags`)
-            }}
-          >
+          <button className="btn btn-ghost-light" onClick={() => setShowTags(true)}>
             Taggar
           </button>
           <button className="btn btn-primary" onClick={() => void handleClose()}>
@@ -203,6 +197,7 @@ export function RoomInventorySheet({
           </button>
         </div>
       </div>
+      {showTags && <TagsOverviewPanel projectId={projectId} onClose={() => setShowTags(false)} />}
     </div>
   )
 }

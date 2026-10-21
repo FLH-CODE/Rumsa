@@ -8,7 +8,11 @@ import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
+import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
+import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
+import { colorForValue } from '../features/tags/colorForValue'
+import { TagIcon, FilterIcon } from '../components/icons'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -28,6 +32,9 @@ export default function DrawingViewerPage() {
   const [addRoomMode, setAddRoomMode] = useState(false)
   const [zoomScale, setZoomScale] = useState(1)
   const [mainRef, mainSize] = useElementSize<HTMLDivElement>()
+  const [showTagsOverview, setShowTagsOverview] = useState(false)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [filterTagId, setFilterTagId] = useState<string | null>(null)
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -59,6 +66,22 @@ export default function DrawingViewerPage() {
     }
     return set
   }, [records])
+
+  const tags = useLiveQuery(
+    () => db.materialTags.where('projectId').equals(projectId ?? '').sortBy('code'),
+    [projectId],
+  )
+  const filterTag = tags?.find((t) => t.id === filterTagId) ?? null
+  const highlightRoomIds = useMemo(() => {
+    if (!filterTagId) return null
+    const set = new Set<string>()
+    for (const record of records ?? []) {
+      if (record.rows.some((row) => row.materials.some((m) => m.tagId === filterTagId))) {
+        set.add(record.roomId)
+      }
+    }
+    return set
+  }, [records, filterTagId])
 
   const handleDetectRooms = async () => {
     if (!doc || !currentPage || !projectId) return
@@ -143,6 +166,21 @@ export default function DrawingViewerPage() {
         </div>
         <button
           className="btn btn-ghost tap-target"
+          onClick={() => setFilterSheetOpen(true)}
+          aria-label={filterTag ? `Färgfilter: ${filterTag.code}` : 'Färglägg efter materialtagg'}
+        >
+          <FilterIcon width={20} height={20} />
+          {filterTag && <span className="viewer-filter-dot" style={{ background: colorForValue(filterTag.code) }} />}
+        </button>
+        <button
+          className="btn btn-ghost tap-target"
+          onClick={() => setShowTagsOverview(true)}
+          aria-label="Materialtaggar"
+        >
+          <TagIcon width={20} height={20} />
+        </button>
+        <button
+          className="btn btn-ghost tap-target"
           onClick={() => setSidebarOpen((open) => !open)}
           aria-label="Visa/dölj sidor"
         >
@@ -201,6 +239,8 @@ export default function DrawingViewerPage() {
                   zoomScale={zoomScale}
                   rooms={rooms ?? []}
                   completedRoomIds={completedRoomIds}
+                  highlightRoomIds={highlightRoomIds}
+                  highlightColor={filterTag ? colorForValue(filterTag.code) : undefined}
                   onRoomTap={setSelectedRoom}
                   addMode={addRoomMode}
                   onCanvasTap={(x, y) => void handleCanvasTap(x, y)}
@@ -224,6 +264,17 @@ export default function DrawingViewerPage() {
 
       {selectedRoom && projectId && (
         <RoomInventorySheet room={selectedRoom} projectId={projectId} onClose={() => setSelectedRoom(null)} />
+      )}
+      {filterSheetOpen && (
+        <TagColorFilterSheet
+          tags={tags ?? []}
+          selectedTagId={filterTagId}
+          onSelect={setFilterTagId}
+          onClose={() => setFilterSheetOpen(false)}
+        />
+      )}
+      {showTagsOverview && projectId && (
+        <TagsOverviewPanel projectId={projectId} onClose={() => setShowTagsOverview(false)} />
       )}
     </div>
   )

@@ -75,3 +75,19 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+export function FilterIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 5h16l-6 7.5V19l-4 2v-8.5Z" />
+    </svg>
+  )
+}
+
+export function CloseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}

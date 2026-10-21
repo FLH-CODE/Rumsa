@@ -19,6 +19,8 @@ export function PdfPageCanvas({
   zoomScale = 1,
   rooms = [],
   completedRoomIds,
+  highlightRoomIds,
+  highlightColor,
   onRoomTap,
   addMode = false,
   onCanvasTap,
@@ -32,6 +34,10 @@ export function PdfPageCanvas({
   rooms?: Room[]
   /** Rum som redan har inventeringsdata – visas fyllda istället för tomma/ifyllningsbara. */
   completedRoomIds?: Set<string>
+  /** När satt (inte undefined/null): färgfilter är aktivt. Rum i mängden lyfts fram i highlightColor,
+   * övriga tonas ner. Ersätter då den vanliga klar/ej klar-färgsättningen. */
+  highlightRoomIds?: Set<string> | null
+  highlightColor?: string
   onRoomTap?: (room: Room) => void
   /** När true: ett klick på ritningen (utanför en befintlig tagg) placerar ett nytt rum där. */
   addMode?: boolean
@@ -113,11 +119,25 @@ export function PdfPageCanvas({
         rooms.map((room) => {
           const [x, y] = viewport.convertToViewportPoint(room.tagX, room.tagY)
           const done = completedRoomIds?.has(room.id)
+          const filtering = highlightRoomIds != null
+          const matches = filtering && highlightRoomIds.has(room.id)
+          const className = [
+            'room-hotspot',
+            !filtering && done && 'done',
+            filtering && (matches ? 'filter-match' : 'filter-dim'),
+          ]
+            .filter(Boolean)
+            .join(' ')
           return (
             <button
               key={room.id}
-              className={`room-hotspot${done ? ' done' : ''}`}
-              style={{ left: x, top: y, transform: `scale(${hotspotScale})` }}
+              className={className}
+              style={{
+                left: x,
+                top: y,
+                transform: `scale(${hotspotScale})`,
+                ...(matches && highlightColor ? { background: highlightColor, borderColor: highlightColor } : {}),
+              }}
               onClick={(e) => {
                 e.stopPropagation()
                 onRoomTap?.(room)

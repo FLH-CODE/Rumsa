@@ -5,10 +5,14 @@ import { colorForValue } from './colorForValue'
 
 const MAX_SUGGESTIONS = 6
 
+type FormState = { mode: 'add' } | { mode: 'edit'; ref: MaterialReference }
+
 /**
  * Listar materialreferenser på en rad (t.ex. två olika klinkertyper på samma vägg, var och en
  * med en notering som "upp till 1200mm") och låter en lägga till fler – antingen genom att
- * återanvända en befintlig tagg ur projektets taggbibliotek eller skapa en ny i farten.
+ * återanvända en befintlig tagg ur projektets taggbibliotek eller skapa en ny i farten. En
+ * befintlig referens går att trycka på för att ändra tagg/notering i efterhand (t.ex. om man
+ * missade att skriva en notering första gången).
  */
 export function MaterialReferenceEditor({
   projectId,
@@ -21,26 +25,52 @@ export function MaterialReferenceEditor({
 }) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).toArray(), [projectId]) ?? []
   const tagById = new Map(tags.map((t) => [t.id, t]))
-  const [adding, setAdding] = useState(false)
+  const [formState, setFormState] = useState<FormState | null>(null)
 
   const addReference = (tagId: string, note: string) => {
     onChange([...references, { id: createId(), tagId, note: note.trim() }])
-    setAdding(false)
+    setFormState(null)
+  }
+
+  const updateReference = (refId: string, tagId: string, note: string) => {
+    onChange(references.map((r) => (r.id === refId ? { ...r, tagId, note: note.trim() } : r)))
+    setFormState(null)
   }
 
   const removeReference = (refId: string) => {
     onChange(references.filter((r) => r.id !== refId))
+    setFormState(null)
   }
 
   return (
     <div className="material-ref-list">
       {references.map((ref) => {
+        if (formState?.mode === 'edit' && formState.ref.id === ref.id) {
+          return (
+            <TagQuickAdd
+              key={ref.id}
+              projectId={projectId}
+              tags={tags}
+              initial={{ tagId: ref.tagId, note: ref.note }}
+              onConfirm={(tagId, note) => updateReference(ref.id, tagId, note)}
+              onRemove={() => removeReference(ref.id)}
+              onCancel={() => setFormState(null)}
+            />
+          )
+        }
         const tag = tagById.get(ref.tagId)
         return (
           <div key={ref.id} className="material-ref-chip">
-            <span className="material-color-dot" style={{ background: colorForValue(tag?.code ?? '') }} />
-            <strong>{tag?.code ?? 'Okänd tagg'}</strong>
-            {ref.note && <span className="material-ref-note">{ref.note}</span>}
+            <button
+              type="button"
+              className="material-ref-chip-main"
+              onClick={() => setFormState({ mode: 'edit', ref })}
+              aria-label={`Ändra ${tag?.code ?? 'material'}${ref.note ? `, ${ref.note}` : ''}`}
+            >
+              <span className="material-color-dot" style={{ background: colorForValue(tag?.code ?? '') }} />
+              <strong>{tag?.code ?? 'Okänd tagg'}</strong>
+              {ref.note && <span className="material-ref-note">{ref.note}</span>}
+            </button>
             <button
               type="button"
               className="material-ref-remove"
@@ -53,15 +83,15 @@ export function MaterialReferenceEditor({
         )
       })}
 
-      {adding ? (
+      {formState?.mode === 'add' ? (
         <TagQuickAdd
           projectId={projectId}
           tags={tags}
-          onAdd={addReference}
-          onCancel={() => setAdding(false)}
+          onConfirm={addReference}
+          onCancel={() => setFormState(null)}
         />
       ) : (
-        <button type="button" className="material-add-btn" onClick={() => setAdding(true)}>
+        <button type="button" className="material-add-btn" onClick={() => setFormState({ mode: 'add' })}>
           + Lägg till material
         </button>
       )}
@@ -72,18 +102,25 @@ export function MaterialReferenceEditor({
 function TagQuickAdd({
   projectId,
   tags,
-  onAdd,
+  initial,
+  onConfirm,
+  onRemove,
   onCancel,
 }: {
   projectId: string
   tags: MaterialTag[]
-  onAdd: (tagId: string, note: string) => void
+  /** Förifyller formuläret med en befintlig referens, för redigering istället för tillägg. */
+  initial?: { tagId: string; note: string }
+  onConfirm: (tagId: string, note: string) => void
+  /** Finns bara i redigeringsläge – tar bort referensen helt istället för att ändra den. */
+  onRemove?: () => void
   onCancel: () => void
 }) {
-  const [query, setQuery] = useState('')
-  const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
-  const [note, setNote] = useState('')
-  const [open, setOpen] = useState(true)
+  const initialTag = initial ? tags.find((t) => t.id === initial.tagId) : undefined
+  const [query, setQuery] = useState(initialTag?.code ?? '')
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(initial?.tagId ?? null)
+  const [note, setNote] = useState(initial?.note ?? '')
+  const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
 
   const filterQuery = query.trim().toLowerCase()
@@ -102,7 +139,7 @@ function TagQuickAdd({
     setConfirming(true)
     try {
       if (selectedTag) {
-        onAdd(selectedTag.id, note)
+        onConfirm(selectedTag.id, note)
         return
       }
       const trimmed = query.trim()
@@ -129,7 +166,7 @@ function TagQuickAdd({
         await db.materialTags.add(newTag)
         return newTag.id
       })
-      onAdd(tagId, note)
+      onConfirm(tagId, note)
     } finally {
       setConfirming(false)
     }
@@ -143,7 +180,7 @@ function TagQuickAdd({
           <input
             value={displayValue}
             placeholder="Sök eller skapa tagg, t.ex. Klinker 1"
-            autoFocus
+            autoFocus={!initial}
             onChange={(e) => {
               setSelectedTagId(null)
               setQuery(e.target.value)
@@ -177,10 +214,16 @@ function TagQuickAdd({
       <input
         className="tag-quick-add-note"
         placeholder="Notering (valfritt), t.ex. upp till 1200mm"
+        autoFocus={Boolean(initial)}
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />
       <div className="tag-quick-add-actions">
+        {onRemove && (
+          <button type="button" className="btn" style={{ color: 'var(--color-danger)', marginRight: 'auto' }} onClick={onRemove}>
+            Ta bort
+          </button>
+        )}
         <button type="button" className="btn btn-secondary" onClick={onCancel}>
           Avbryt
         </button>
@@ -190,7 +233,13 @@ function TagQuickAdd({
           disabled={(!query.trim() && !selectedTag) || confirming}
           onClick={() => void handleConfirm()}
         >
-          {confirming ? 'Lägger till…' : exactMatch || selectedTag ? 'Lägg till' : `Skapa "${query.trim()}"`}
+          {confirming
+            ? 'Sparar…'
+            : initial
+              ? 'Spara'
+              : exactMatch || selectedTag
+                ? 'Lägg till'
+                : `Skapa "${query.trim()}"`}
         </button>
       </div>
     </div>
