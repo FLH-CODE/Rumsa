@@ -4,6 +4,7 @@ import { db, createId, type InventoryRow, type Room } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { MaterialAutocompleteInput } from './MaterialAutocompleteInput'
+import { deleteRoomCascade } from '../data/cascadeDelete'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -22,6 +23,40 @@ export function RoomInventorySheet({
   onClose: () => void
 }) {
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  // Rumsnummer/namn kommer från automatisk textigenkänning och kan bli fel – görs redigerbara
+  // här så man kan rätta till det utan att behöva köra om hela detekteringen.
+  const [roomNumber, setRoomNumber] = useState(room.roomNumber)
+  const [roomName, setRoomName] = useState(room.roomName)
+
+  useAutosave(
+    { roomNumber, roomName },
+    async (value) => {
+      const patch: Partial<Room> = {}
+      if (value.roomNumber.trim()) patch.roomNumber = value.roomNumber.trim()
+      if (value.roomName.trim()) patch.roomName = value.roomName.trim()
+      if (Object.keys(patch).length === 0) return
+      await db.rooms.update(room.id, patch)
+    },
+    600,
+  )
+
+  const handleDeleteRoom = async () => {
+    if (!confirm(`Ta bort rum ${roomNumber || room.roomNumber}? Rumstaggen och dess inventering tas bort permanent.`)) {
+      return
+    }
+    await deleteRoomCascade(room.id)
+    onClose()
+  }
+
+  // Ett manuellt tillagt rum som stängs utan att få ett nummer skulle annars bli en övergiven,
+  // onamngiven tagg kvar på ritningen för alltid.
+  const handleClose = async () => {
+    if (!roomNumber.trim()) {
+      await deleteRoomCascade(room.id)
+    }
+    onClose()
+  }
 
   // Skapar inventeringsposten första gången rummet öppnas. Körs i en transaktion (se
   // ensureInventoryRecord) så StrictModes dubbelkörning i dev-läge inte skapar två poster.
@@ -76,12 +111,24 @@ export function RoomInventorySheet({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={() => void handleClose()}>
       <div className="modal-sheet inventory-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="inventory-sheet-header">
-          <div>
-            <strong>Rum {room.roomNumber}</strong>
-            <span className="field-hint">{room.roomName}</span>
+          <div className="inventory-sheet-title">
+            <input
+              className="inventory-room-number"
+              value={roomNumber}
+              placeholder="Rumsnummer"
+              onChange={(e) => setRoomNumber(e.target.value)}
+              aria-label="Rumsnummer"
+            />
+            <input
+              className="inventory-room-name"
+              value={roomName}
+              placeholder="Rumsnamn"
+              onChange={(e) => setRoomName(e.target.value)}
+              aria-label="Rumsnamn"
+            />
           </div>
           <span className="field-hint">{STATUS_LABEL[status]}</span>
         </div>
@@ -142,8 +189,11 @@ export function RoomInventorySheet({
           </div>
         )}
 
-        <div className="modal-actions">
-          <button className="btn btn-primary" onClick={onClose}>
+        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+          <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
+            Ta bort rum
+          </button>
+          <button className="btn btn-primary" onClick={() => void handleClose()}>
             Klar
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import type { Room } from '../../db'
 import type { ElementSize } from '../../hooks/useElementSize'
@@ -19,6 +19,8 @@ export function PdfPageCanvas({
   zoomScale = 1,
   rooms = [],
   onRoomTap,
+  addMode = false,
+  onCanvasTap,
 }: {
   doc: PDFDocumentProxy
   pageIndex: number
@@ -28,6 +30,9 @@ export function PdfPageCanvas({
   zoomScale?: number
   rooms?: Room[]
   onRoomTap?: (room: Room) => void
+  /** När true: ett klick på ritningen (utanför en befintlig tagg) placerar ett nytt rum där. */
+  addMode?: boolean
+  onCanvasTap?: (pdfX: number, pdfY: number) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // Taggad med pageIndex så en viewport från en tidigare sida aldrig används för hotspot-positioner
@@ -87,8 +92,19 @@ export function PdfPageCanvas({
   const viewport = rendered?.pageIndex === pageIndex ? rendered.displayViewport : null
   const hotspotScale = 1 / zoomScale
 
+  const handleStageClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!addMode || !viewport || !onCanvasTap) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const cssX = e.clientX - rect.left
+    const cssY = e.clientY - rect.top
+    const [pdfX, pdfY] = viewport.convertToPdfPoint(cssX, cssY) as [number, number]
+    onCanvasTap(pdfX, pdfY)
+  }
+
   return (
-    <div className="pdf-page-stage">
+    <div className={`pdf-page-stage${addMode ? ' add-mode' : ''}`} onClick={handleStageClick}>
       <canvas ref={canvasRef} />
       {viewport &&
         rooms.map((room) => {
@@ -98,7 +114,10 @@ export function PdfPageCanvas({
               key={room.id}
               className="room-hotspot"
               style={{ left: x, top: y, transform: `scale(${hotspotScale})` }}
-              onClick={() => onRoomTap?.(room)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRoomTap?.(room)
+              }}
               aria-label={`${room.roomName} ${room.roomNumber}`}
             />
           )

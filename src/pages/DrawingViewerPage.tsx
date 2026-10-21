@@ -25,6 +25,7 @@ export default function DrawingViewerPage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [addRoomMode, setAddRoomMode] = useState(false)
   const [zoomScale, setZoomScale] = useState(1)
   const [mainRef, mainSize] = useElementSize<HTMLDivElement>()
 
@@ -55,6 +56,24 @@ export default function DrawingViewerPage() {
     } finally {
       setDetecting(false)
     }
+  }
+
+  const handleCanvasTap = async (pdfX: number, pdfY: number) => {
+    if (!currentPage || !projectId) return
+    setAddRoomMode(false)
+    const newRoom: Room = {
+      id: createId(),
+      projectId,
+      levelId: currentPage.levelId,
+      drawingPageId: currentPage.id,
+      roomNumber: '',
+      roomName: '',
+      tagX: pdfX,
+      tagY: pdfY,
+      templateId: null,
+    }
+    await db.rooms.add(newRoom)
+    setSelectedRoom(newRoom)
   }
 
   if (pages === undefined || levels === undefined) {
@@ -167,13 +186,23 @@ export default function DrawingViewerPage() {
                   zoomScale={zoomScale}
                   rooms={rooms ?? []}
                   onRoomTap={setSelectedRoom}
+                  addMode={addRoomMode}
+                  onCanvasTap={(x, y) => void handleCanvasTap(x, y)}
                 />
               </TransformComponent>
             </TransformWrapper>
           )}
-          <button className="btn btn-secondary detect-rooms-btn" onClick={handleDetectRooms} disabled={detecting}>
-            {detecting ? 'Letar rum…' : `Hitta rum (${rooms?.length ?? 0})`}
-          </button>
+          <div className="viewer-toolbar">
+            <button className="btn btn-secondary" onClick={handleDetectRooms} disabled={detecting}>
+              {detecting ? 'Letar rum…' : `Hitta rum (${rooms?.length ?? 0})`}
+            </button>
+            <button
+              className={`btn ${addRoomMode ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setAddRoomMode((on) => !on)}
+            >
+              {addRoomMode ? 'Tryck på ritningen…' : '+ Lägg till rum'}
+            </button>
+          </div>
         </div>
       </div>
 

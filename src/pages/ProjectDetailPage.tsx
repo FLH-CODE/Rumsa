@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../db'
 import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
 import { importDrawingFile } from '../features/pdf/importDrawing'
+import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
+import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -104,26 +106,24 @@ export default function ProjectDetailPage() {
   const handleDelete = async () => {
     if (!projectId) return
     if (!confirm(`Ta bort projektet "${project.name}"? Detta går inte att ångra.`)) return
-
-    // Städar bort all data som hör till projektet, inte bara projektposten – annars blir
-    // uppladdade PDF:er och inventeringar kvar och tar plats utan att synas någonstans.
-    await db.transaction(
-      'rw',
-      [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialValues],
-      async () => {
-        const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
-        await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).delete()
-        await Promise.all([
-          db.rooms.where('projectId').equals(projectId).delete(),
-          db.drawingPages.where('projectId').equals(projectId).delete(),
-          db.drawings.where('projectId').equals(projectId).delete(),
-          db.levels.where('projectId').equals(projectId).delete(),
-          db.materialValues.where('projectId').equals(projectId).delete(),
-        ])
-        await db.projects.delete(projectId)
-      },
-    )
+    await deleteProjectCascade(projectId)
     navigate('/')
+  }
+
+  const handleDeleteDrawing = async (drawingId: string, fileName: string) => {
+    if (
+      !confirm(
+        `Ta bort ritningen "${fileName}"? Rum och inventering som hör till dess sidor tas bort permanent.`,
+      )
+    ) {
+      return
+    }
+    await deleteDrawingCascade(drawingId)
+  }
+
+  const handlePatternChange = async (pattern: string) => {
+    if (!projectId) return
+    await db.projects.update(projectId, { roomNumberPattern: pattern, updatedAt: Date.now() })
   }
 
   return (
@@ -146,6 +146,28 @@ export default function ProjectDetailPage() {
             }}
           />
         </div>
+
+        <section className="card" style={{ marginBottom: 12 }}>
+          <strong>Inställningar</strong>
+          <div className="field" style={{ marginTop: 10 }}>
+            <label htmlFor="room-pattern">Rumsnummerformat i ritningarna</label>
+            <select
+              id="room-pattern"
+              value={project.roomNumberPattern}
+              onChange={(e) => void handlePatternChange(e.target.value)}
+            >
+              {ROOM_NUMBER_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-hint">
+              Styr hur appen känner igen rumsnummer. Redan uppladdade ritningar uppdateras inte automatiskt –
+              tryck "Hitta rum" igen i visaren efter en ändring.
+            </span>
+          </div>
+        </section>
 
         <section className="card" style={{ marginBottom: 12 }}>
           <strong>Ritningar</strong>
@@ -187,6 +209,13 @@ export default function ProjectDetailPage() {
                 <div key={d.id} className="drawing-list-item">
                   <span>{d.fileName}</span>
                   <span>{d.pageCount} sidor</span>
+                  <button
+                    className="drawing-delete-btn tap-target"
+                    aria-label={`Ta bort ${d.fileName}`}
+                    onClick={() => void handleDeleteDrawing(d.id, d.fileName)}
+                  >
+                    🗑
+                  </button>
                 </div>
               ))}
             </div>

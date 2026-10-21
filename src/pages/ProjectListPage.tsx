@@ -2,17 +2,24 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, createId, type Project } from '../db'
-
-const ROOM_NUMBER_PRESETS = [
-  { label: 'Enkelt nummer (t.ex. 1003)', value: '^\\d{3,4}$' },
-  { label: 'Med suffix (t.ex. 1006B, 102RWC)', value: '^\\d{3,4}[A-ZÅÄÖ]{0,4}$' },
-  { label: 'Projektkod (t.ex. P20:F1B401)', value: '^P\\d{1,2}:[A-Z0-9]+$' },
-]
+import { deleteProjectCascade } from '../features/data/cascadeDelete'
+import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray(), [])
   const [showCreate, setShowCreate] = useState(false)
+
+  const handleDelete = async (project: Project) => {
+    if (
+      !confirm(
+        `Ta bort projektet "${project.name}"? Ritningar och all inventerad data för projektet tas bort permanent.`,
+      )
+    ) {
+      return
+    }
+    await deleteProjectCascade(project.id)
+  }
 
   return (
     <>
@@ -28,17 +35,24 @@ export default function ProjectListPage() {
         ) : (
           <div className="card-list">
             {projects.map((project) => (
-              <button
-                key={project.id}
-                className="card"
-                style={{ textAlign: 'left', width: '100%' }}
-                onClick={() => navigate(`/project/${project.id}`)}
-              >
-                <span className="card-link">
-                  <strong>{project.name}</strong>
-                  <span>Uppdaterad {new Date(project.updatedAt).toLocaleDateString('sv-SE')}</span>
-                </span>
-              </button>
+              <div key={project.id} className="card project-card">
+                <button className="card-link-btn" onClick={() => navigate(`/project/${project.id}`)}>
+                  <span className="card-link">
+                    <strong>{project.name}</strong>
+                    <span>Uppdaterad {new Date(project.updatedAt).toLocaleDateString('sv-SE')}</span>
+                  </span>
+                </button>
+                <button
+                  className="project-delete-btn tap-target"
+                  aria-label={`Ta bort ${project.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleDelete(project)
+                  }}
+                >
+                  🗑
+                </button>
+              </div>
             ))}
           </div>
         )}
