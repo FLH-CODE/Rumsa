@@ -8,6 +8,7 @@ import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
+import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -19,7 +20,9 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
 export default function DrawingViewerPage() {
   const { projectId, drawingPageId } = useParams<{ projectId: string; drawingPageId: string }>()
   const navigate = useNavigate()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Öppen som standard på bredare skärmar, stängd på mobil där panelen annars tar en stor del
+  // av en redan liten yta.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [zoomScale, setZoomScale] = useState(1)
@@ -36,7 +39,7 @@ export default function DrawingViewerPage() {
 
   const currentIndex = sortedPages.findIndex((p) => p.id === drawingPageId)
   const currentPage = currentIndex >= 0 ? sortedPages[currentIndex] : null
-  const { doc } = usePdfDocument(currentPage?.drawingId ?? null)
+  const { doc, error: docError } = usePdfDocument(currentPage?.drawingId ?? null)
   const rooms = useLiveQuery(
     () => (currentPage ? db.rooms.where('drawingPageId').equals(currentPage.id).toArray() : []),
     [currentPage?.id],
@@ -67,7 +70,7 @@ export default function DrawingViewerPage() {
       <div className="viewer-page">
         <header className="viewer-header">
           <button className="btn btn-ghost tap-target" onClick={() => navigate(`/project/${projectId}`)}>
-            ← Tillbaka
+            ← Projekt
           </button>
         </header>
         <div className="viewer-empty">Ritningen kunde inte hittas.</div>
@@ -140,6 +143,8 @@ export default function DrawingViewerPage() {
               ›
             </button>
           )}
+          {docError && <div className="viewer-empty">Ritningen kunde inte läsas in. {docError.message}</div>}
+          {!doc && !docError && <div className="viewer-empty">Läser in ritning…</div>}
           {doc && mainSize && (
             <TransformWrapper
               key={currentPage.id}
@@ -172,26 +177,9 @@ export default function DrawingViewerPage() {
         </div>
       </div>
 
-      {selectedRoom && <RoomSheet room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
-    </div>
-  )
-}
-
-function RoomSheet({ room, onClose }: { room: Room; onClose: () => void }) {
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="room-sheet-row">
-          <strong>Rum {room.roomNumber}</strong>
-          <span>{room.roomName}</span>
-        </div>
-        <p className="field-hint">Inventeringsformulär kommer i nästa fas.</p>
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onClose}>
-            Stäng
-          </button>
-        </div>
-      </div>
+      {selectedRoom && projectId && (
+        <RoomInventorySheet room={selectedRoom} projectId={projectId} onClose={() => setSelectedRoom(null)} />
+      )}
     </div>
   )
 }
@@ -223,18 +211,34 @@ function LevelNameEditor({
     async (value) => {
       const trimmed = value.trim()
       if (!trimmed) return
+
       if (level) {
         await db.levels.update(level.id, { name: trimmed })
-      } else {
-        const newLevel: Level = {
-          id: createId(),
-          projectId,
-          name: trimmed,
-          order: 0,
-        }
-        await db.levels.add(newLevel)
-        await db.drawingPages.update(drawingPage.id, { levelId: newLevel.id })
+        return
       }
+
+      // Återanvänd en befintlig nivå med samma namn istället för att alltid skapa en ny – annars
+      // kan man råka skapa dubbletter av t.ex. "PLAN 7" om flera sidor saknar nivå samtidigt.
+      await db.transaction('rw', [db.levels, db.drawingPages, db.rooms], async () => {
+        const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
+        let target = existingLevels.find((l) => l.name.toLowerCase() === trimmed.toLowerCase())
+
+        if (!target) {
+          const numericMatch = trimmed.match(/\d+/)
+          target = {
+            id: createId(),
+            projectId,
+            name: trimmed,
+            order: numericMatch ? parseInt(numericMatch[0], 10) : existingLevels.length,
+          }
+          await db.levels.add(target)
+        }
+
+        await db.drawingPages.update(drawingPage.id, { levelId: target.id })
+        // Rum som redan upptäckts på sidan innan nivån fanns pekade på levelId: null – utan den
+        // här uppdateringen skulle de tappa bort nivåkopplingen i t.ex. Excel-exporten.
+        await db.rooms.where('drawingPageId').equals(drawingPage.id).modify({ levelId: target.id })
+      })
     },
     700,
   )

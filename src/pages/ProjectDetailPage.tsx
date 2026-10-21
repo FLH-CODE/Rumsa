@@ -16,7 +16,10 @@ export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
-  const [name, setName] = useState('')
+  // null = projektet är inte inläst än. Skiljer "väntar på data" från ett medvetet tomt namn,
+  // så att inläsningen av det riktiga namnet inte räknas som en användarredigering och triggar
+  // ett onödigt sparande (som annars skulle putta upp projektet överst i listan vid varje öppning).
+  const [name, setName] = useState<string | null>(null)
   const [nameTouched, setNameTouched] = useState(false)
   const [importState, setImportState] = useState<{ busy: boolean; error: string | null }>({
     busy: false,
@@ -37,11 +40,17 @@ export default function ProjectDetailPage() {
         .then((p) => p[0]),
     [projectId],
   )
+  const roomCount = useLiveQuery(
+    () => db.rooms.where('projectId').equals(projectId ?? '').count(),
+    [projectId],
+  )
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const status = useAutosave(
     name,
     async (value) => {
-      if (!projectId || !value.trim()) return
+      if (!projectId || !value?.trim()) return
       await db.projects.update(projectId, { name: value.trim(), updatedAt: Date.now() })
     },
     600,
@@ -77,10 +86,43 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const handleExport = async () => {
+    if (!project) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      // Laddas bara in när man faktiskt exporterar – xlsx är tungt och behövs inte i grundappen.
+      const { exportProjectToExcel } = await import('../features/export/exportProjectToExcel')
+      await exportProjectToExcel(project)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Okänt fel vid export.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!projectId) return
     if (!confirm(`Ta bort projektet "${project.name}"? Detta går inte att ångra.`)) return
-    await db.projects.delete(projectId)
+
+    // Städar bort all data som hör till projektet, inte bara projektposten – annars blir
+    // uppladdade PDF:er och inventeringar kvar och tar plats utan att synas någonstans.
+    await db.transaction(
+      'rw',
+      [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialValues],
+      async () => {
+        const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
+        await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).delete()
+        await Promise.all([
+          db.rooms.where('projectId').equals(projectId).delete(),
+          db.drawingPages.where('projectId').equals(projectId).delete(),
+          db.drawings.where('projectId').equals(projectId).delete(),
+          db.levels.where('projectId').equals(projectId).delete(),
+          db.materialValues.where('projectId').equals(projectId).delete(),
+        ])
+        await db.projects.delete(projectId)
+      },
+    )
     navigate('/')
   }
 
@@ -97,7 +139,7 @@ export default function ProjectDetailPage() {
           <label htmlFor="project-name">Projektnamn</label>
           <input
             id="project-name"
-            value={name}
+            value={name ?? ''}
             onChange={(e) => {
               setNameTouched(true)
               setName(e.target.value)
@@ -153,7 +195,28 @@ export default function ProjectDetailPage() {
 
         <section className="card" style={{ marginBottom: 12 }}>
           <strong>Rum</strong>
-          <p className="field-hint">Rumstaggar tolkas automatiskt ur ritningarna – kommer i nästa fas.</p>
+          <p className="field-hint">
+            {roomCount
+              ? `${roomCount} rum hittade. Öppna ritningsvisaren och tryck på en rumstagg för att inventera.`
+              : 'Rumstaggar tolkas automatiskt när en ritning laddas upp.'}
+          </p>
+        </section>
+
+        <section className="card" style={{ marginBottom: 12 }}>
+          <strong>Export</strong>
+          <p className="field-hint">Exportera all inventerad data till Excel.</p>
+          <button
+            className="btn btn-secondary"
+            onClick={handleExport}
+            disabled={exporting || !roomCount}
+          >
+            {exporting ? 'Exporterar…' : 'Exportera till Excel'}
+          </button>
+          {exportError && (
+            <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
+              {exportError}
+            </p>
+          )}
         </section>
 
         <button

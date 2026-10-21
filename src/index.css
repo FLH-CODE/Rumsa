@@ -2,7 +2,9 @@
   color-scheme: light;
   --color-bg: #f4f6f7;
   --color-surface: #ffffff;
-  --color-border: #e2e8ea;
+  /* Mörkare än en typisk "subtil" ramfärg med flit – appen används utomhus på byggarbetsplatser,
+     och en ljus ram syns knappt i starkt dagsljus. */
+  --color-border: #99a6ab;
   --color-text: #15232a;
   --color-text-muted: #5b6b70;
   --color-primary: #164e63;
@@ -394,10 +396,10 @@ a {
 
 .room-hotspot {
   position: absolute;
-  width: 32px;
-  height: 32px;
-  margin-left: -16px;
-  margin-top: -16px;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  margin-top: -18px;
   border-radius: 50%;
   background: rgba(239, 163, 15, 0.4);
   border: 2px solid #efa30f;
@@ -406,18 +408,6 @@ a {
 
 .room-hotspot:active {
   background: rgba(239, 163, 15, 0.7);
-}
-
-.room-sheet-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.room-sheet-row:last-child {
-  border-bottom: none;
 }
 
 .detect-rooms-btn {
@@ -464,4 +454,139 @@ a {
   color: rgba(255, 255, 255, 0.7);
   padding: 24px;
   text-align: center;
+}
+
+/* --- Inventeringsformulär --- */
+
+.inventory-sheet {
+  width: 100%;
+  max-width: 560px;
+}
+
+.inventory-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  /* Sparstatusen ska synas även när man scrollat ner i ett långt formulär (t.ex. många rader). */
+  position: sticky;
+  top: -20px;
+  margin: -20px -16px 0;
+  padding: 20px 16px 12px;
+  background: var(--color-surface);
+  z-index: 2;
+}
+
+.inventory-sheet-header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.inventory-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inventory-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.inventory-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-surface-name {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 6px 4px;
+  min-height: 36px;
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.inventory-remove-row {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  border-radius: 50%;
+}
+
+.inventory-remove-row:active {
+  background: var(--color-border);
+}
+
+/* --- Materialförslag --- */
+
+.material-autocomplete {
+  position: relative;
+}
+
+.material-autocomplete-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 10px;
+  background: var(--color-surface);
+}
+
+.material-autocomplete-field input {
+  flex: 1;
+  border: none;
+  padding: 10px 2px;
+  min-height: 44px;
+  font-size: 1rem;
+  background: transparent;
+}
+
+.material-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.material-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.material-suggestions li button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 6px;
+  min-height: 40px;
+  font-size: 0.95rem;
+}
+
+.material-suggestions li button:active {
+  background: var(--color-bg);
 }
