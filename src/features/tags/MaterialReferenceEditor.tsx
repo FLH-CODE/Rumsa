@@ -3,7 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, type MaterialReference, type MaterialTag } from '../../db'
 import { colorForValue } from './colorForValue'
 
-const MAX_SUGGESTIONS = 6
+// Listan är scrollbar (se .material-suggestions), så en hög gräns fungerar fint – man ska kunna
+// se hela taggbiblioteket direkt när man öppnar fältet, inte bara ett fåtal träffar.
+const MAX_SUGGESTIONS = 50
 
 type FormState = { mode: 'add' } | { mode: 'edit'; ref: MaterialReference }
 
@@ -189,7 +191,7 @@ function TagQuickAdd({
             onFocus={() => setOpen(true)}
           />
         </div>
-        {open && !selectedTag && query && filtered.length > 0 && (
+        {open && !selectedTag && filtered.length > 0 && (
           <ul className="material-suggestions">
             {filtered.map((t) => (
               <li key={t.id}>

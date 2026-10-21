@@ -32,6 +32,10 @@ body {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
+  /* Ska kännas som en app, inte en webbsida – ingen pinch-zoom eller dubbeltryck-zoom på
+     gränssnittet. Ritningsvisaren tar över sin egen pinch/pan-hantering (se .viewer-main
+     .react-transform-wrapper), så den påverkas inte av detta. */
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -277,6 +281,20 @@ textarea:focus-visible {
   .modal-sheet {
     border-radius: var(--radius-lg);
     padding: 20px;
+  }
+}
+
+/* Lite större tryckytor och text på surfplatta/större skärm – annars känns kontroller som är
+   tätt anpassade för en telefonskärm onödigt små på en iPad. */
+@media (min-width: 768px) {
+  .btn,
+  .tap-target {
+    min-height: 50px;
+  }
+
+  .btn {
+    font-size: 1rem;
+    padding: 12px 20px;
   }
 }
 
@@ -560,27 +578,31 @@ textarea:focus-visible {
 }
 
 .viewer-toolbar .btn {
-  font-size: 0.8rem;
-  padding: 8px 14px;
-  min-height: 36px;
-  opacity: 0.92;
+  font-size: 0.85rem;
+  padding: 10px 16px;
+  min-height: 44px;
   white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
+/* Flytande kontroller ovanpå ritningen ska alltid synas tydligt och gå att träffa, oavsett
+   hur man zoomat/panorerat – därför full opacitet (ingen urblekning) och en skugga som lyfter
+   fram dem mot både ljusa och mörka delar av underliggande ritning. */
 .viewer-nav-btn {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
   font-size: 1.3rem;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 4;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .viewer-nav-btn.prev {
@@ -885,6 +907,20 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.tag-used-in-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-used-in-chip {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
 .tag-filter-list {
   display: flex;
   flex-direction: column;
@@ -944,6 +980,7 @@ textarea:focus-visible {
 
 .tag-card-text {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -953,6 +990,15 @@ textarea:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tag-card-room-count {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 3px 9px;
 }
 
 /* --- Footer i inventeringsformuläret --- */

@@ -5,9 +5,12 @@ import type { ElementSize } from '../../hooks/useElementSize'
 
 /** Hur mycket extra upplösning (utöver skärmens pixeltäthet) som renderas utöver fit-to-screen,
  * så att man kan zooma in en bit innan bilden börjar bli suddig/pixelerad. */
-const BASE_SHARPNESS = 2.5
-/** Skyddar mot canvas-storleksgränser på vissa mobila webbläsare (t.ex. iOS Safari). */
-const MAX_BACKING_DIMENSION = 4096
+const BASE_SHARPNESS = 3.5
+/** Skyddar mot canvas-storleksgränser på vissa mobila webbläsare (t.ex. iOS Safari), som historiskt
+ * satt gränsen vid total yta (bredd×höjd) snarare än en enda sidas mått – räknat som yta istället
+ * för en platt maxbredd/höjd får avlånga planritningar (vanligt i liggande format) utnyttja hela
+ * gränsen, vilket ger märkbart skarpare bild vid djup inzoomning än en enkel maxmått-gräns. */
+const MAX_BACKING_AREA = 4096 * 4096
 
 /** Hur långt man kan zooma in bortom fit-to-screen (scale 1) innan skärpan tar slut. Matchar BASE_SHARPNESS. */
 export const PDF_MAX_ZOOM = BASE_SHARPNESS
@@ -65,9 +68,9 @@ export function PdfPageCanvas({
       const dpr = window.devicePixelRatio || 1
       let renderScale = fitScale * dpr * BASE_SHARPNESS
 
-      const maxBackingDim = Math.max(natural.width, natural.height) * renderScale
-      if (maxBackingDim > MAX_BACKING_DIMENSION) {
-        renderScale *= MAX_BACKING_DIMENSION / maxBackingDim
+      const backingArea = natural.width * natural.height * renderScale * renderScale
+      if (backingArea > MAX_BACKING_AREA) {
+        renderScale *= Math.sqrt(MAX_BACKING_AREA / backingArea)
       }
 
       const renderViewport = page.getViewport({ scale: renderScale })

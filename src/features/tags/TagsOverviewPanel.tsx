@@ -16,6 +16,19 @@ export function TagsOverviewPanel({ projectId, onClose }: { projectId: string; o
   const [editingTag, setEditingTag] = useState<MaterialTag | null>(null)
   const [creating, setCreating] = useState(false)
 
+  // Hur många rum som refererar varje tagg – så man ser omfattningen direkt i listan, inte bara
+  // efter att ha öppnat en enskild tagg.
+  const roomCountByTag = useLiveQuery(async () => {
+    const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
+    const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
+    const counts = new Map<string, number>()
+    for (const record of records) {
+      const tagIds = new Set(record.rows.flatMap((row) => row.materials.map((m) => m.tagId)))
+      for (const tagId of tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1)
+    }
+    return counts
+  }, [projectId])
+
   return (
     // stopPropagation: panelen kan renderas inuti ett annat lager med egen onClick-stängning
     // (t.ex. rumskortets modal-backdrop) – utan detta skulle ett klick här av misstag stänga
@@ -41,15 +54,19 @@ export function TagsOverviewPanel({ projectId, onClose }: { projectId: string; o
           </div>
         ) : (
           <div className="card-list">
-            {tags.map((tag) => (
-              <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
-                <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
-                <span className="tag-card-text">
-                  <strong>{tag.code}</strong>
-                  <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
-                </span>
-              </button>
-            ))}
+            {tags.map((tag) => {
+              const roomCount = roomCountByTag?.get(tag.id) ?? 0
+              return (
+                <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
+                  <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
+                  <span className="tag-card-text">
+                    <strong>{tag.code}</strong>
+                    <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
+                  </span>
+                  {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
+                </button>
+              )
+            })}
           </div>
         )}
       </main>
@@ -80,6 +97,24 @@ function TagEditSheet({
   const [description, setDescription] = useState(tag?.description ?? '')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Vilka rum som redan refererar den här taggen – så man ser räckvidden innan man t.ex. tar
+  // bort den. Bara relevant för en befintlig tagg, inte när man håller på att skapa en ny.
+  const roomsUsingTag = useLiveQuery(async () => {
+    if (!tag) return []
+    const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
+    const roomById = new Map(rooms.map((r) => [r.id, r]))
+    const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
+    const matchingRoomIds = new Set(
+      records
+        .filter((record) => record.rows.some((row) => row.materials.some((m) => m.tagId === tag.id)))
+        .map((record) => record.roomId),
+    )
+    return [...matchingRoomIds]
+      .map((id) => roomById.get(id))
+      .filter((r): r is NonNullable<typeof r> => Boolean(r))
+      .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, 'sv'))
+  }, [projectId, tag?.id])
 
   const handleSave = async () => {
     const trimmedCode = code.trim()
@@ -147,6 +182,25 @@ function TagEditSheet({
             placeholder="t.ex. Klinkerplatta 600x600, ljusgrå"
           />
         </div>
+        {tag && (
+          <div className="field">
+            <label>Används i</label>
+            {roomsUsingTag === undefined ? (
+              <span className="field-hint">Laddar…</span>
+            ) : roomsUsingTag.length === 0 ? (
+              <span className="field-hint">Inget rum ännu.</span>
+            ) : (
+              <div className="tag-used-in-rooms">
+                {roomsUsingTag.map((room) => (
+                  <span key={room.id} className="tag-used-in-chip">
+                    {room.roomNumber}
+                    {room.roomName && ` – ${room.roomName}`}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {saveError && (
           <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
             {saveError}
