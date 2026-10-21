@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, createId, type InventoryRow, type Room } from '../../db'
+import { useNavigate } from 'react-router-dom'
+import { db, createId, type InventoryRow, type MaterialReference, type Room } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
-import { MaterialAutocompleteInput } from './MaterialAutocompleteInput'
+import { RivningInput } from './RivningInput'
+import { MaterialReferenceEditor } from '../tags/MaterialReferenceEditor'
 import { deleteRoomCascade } from '../data/cascadeDelete'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
@@ -22,10 +24,9 @@ export function RoomInventorySheet({
   projectId: string
   onClose: () => void
 }) {
+  const navigate = useNavigate()
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Rumsnummer/namn kommer från automatisk textigenkänning och kan bli fel – görs redigerbara
-  // här så man kan rätta till det utan att behöva köra om hela detekteringen.
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
 
@@ -49,8 +50,6 @@ export function RoomInventorySheet({
     onClose()
   }
 
-  // Ett manuellt tillagt rum som stängs utan att få ett nummer skulle annars bli en övergiven,
-  // onamngiven tagg kvar på ritningen för alltid.
   const handleClose = async () => {
     if (!roomNumber.trim()) {
       await deleteRoomCascade(room.id)
@@ -58,8 +57,6 @@ export function RoomInventorySheet({
     onClose()
   }
 
-  // Skapar inventeringsposten första gången rummet öppnas. Körs i en transaktion (se
-  // ensureInventoryRecord) så StrictModes dubbelkörning i dev-läge inte skapar två poster.
   useEffect(() => {
     ensureInventoryRecord(room).catch((err) => {
       setLoadError(err instanceof Error ? err.message : 'Kunde inte öppna rummet.')
@@ -68,9 +65,6 @@ export function RoomInventorySheet({
 
   const record = useLiveQuery(() => db.inventoryRecords.where('roomId').equals(room.id).first(), [room.id])
 
-  // Lokalt redigeringsläge, synkat en gång (taggat med record.id) när posten laddas – därefter
-  // är lokalt state facit tills man stänger, så att livequeryns återkoppling från vårt eget
-  // sparande inte skriver över det man just skriver.
   const [loaded, setLoaded] = useState<{ recordId: string; rows: InventoryRow[] } | null>(null)
 
   useEffect(() => {
@@ -99,13 +93,17 @@ export function RoomInventorySheet({
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)))
   }
 
+  const setRowMaterials = (rowId: string, materials: MaterialReference[]) => {
+    updateRow(rowId, { materials })
+  }
+
   const addRow = () => {
-    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', malningSortKulor: '' }])
+    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [] }])
   }
 
   const removeRow = (rowId: string) => {
     const row = rows?.find((r) => r.id === rowId)
-    const hasContent = Boolean(row?.rivning.trim() || row?.malningSortKulor.trim())
+    const hasContent = Boolean(row?.rivning.trim() || row?.materials.length)
     if (hasContent && !confirm('Ta bort raden? Ifylld text för raden försvinner.')) return
     setRows((prev) => prev.filter((r) => r.id !== rowId))
   }
@@ -130,7 +128,9 @@ export function RoomInventorySheet({
               aria-label="Rumsnamn"
             />
           </div>
-          <span className="field-hint">{STATUS_LABEL[status]}</span>
+          <span className="field-hint save-status" data-status={status}>
+            {STATUS_LABEL[status]}
+          </span>
         </div>
 
         {loadError ? (
@@ -161,24 +161,20 @@ export function RoomInventorySheet({
                 </div>
                 <div className="field">
                   <label htmlFor={`rivning-${row.id}`}>Rivning</label>
-                  <MaterialAutocompleteInput
+                  <RivningInput
                     inputId={`rivning-${row.id}`}
                     projectId={projectId}
-                    field="rivning"
                     value={row.rivning}
                     onChange={(value) => updateRow(row.id, { rivning: value })}
                     placeholder="t.ex. Bef. golv rivs."
                   />
                 </div>
                 <div className="field">
-                  <label htmlFor={`malning-${row.id}`}>Målning/Sort/Kulör</label>
-                  <MaterialAutocompleteInput
-                    inputId={`malning-${row.id}`}
+                  <label>Material</label>
+                  <MaterialReferenceEditor
                     projectId={projectId}
-                    field="malningSortKulor"
-                    value={row.malningSortKulor}
-                    onChange={(value) => updateRow(row.id, { malningSortKulor: value })}
-                    placeholder="t.ex. Klinker 1"
+                    references={row.materials}
+                    onChange={(materials) => setRowMaterials(row.id, materials)}
                   />
                 </div>
               </div>
@@ -189,9 +185,18 @@ export function RoomInventorySheet({
           </div>
         )}
 
-        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+        <div className="modal-actions inventory-sheet-footer">
           <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
             Ta bort rum
+          </button>
+          <button
+            className="btn btn-ghost-light"
+            onClick={() => {
+              void handleClose()
+              navigate(`/project/${projectId}/tags`)
+            }}
+          >
+            Taggar
           </button>
           <button className="btn btn-primary" onClick={() => void handleClose()}>
             Klar

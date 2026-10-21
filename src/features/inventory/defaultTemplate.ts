@@ -8,7 +8,7 @@ function emptyRows() {
     id: createId(),
     surface,
     rivning: '',
-    malningSortKulor: '',
+    materials: [],
   }))
 }
 

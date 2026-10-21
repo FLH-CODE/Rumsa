@@ -2,17 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../db'
-import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
+import { useAutosave } from '../hooks/useAutosave'
 import { importDrawingFile } from '../features/pdf/importDrawing'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
-
-const STATUS_LABEL: Record<SaveStatus, string> = {
-  idle: '',
-  saving: 'Sparar…',
-  saved: 'Sparat',
-  error: 'Kunde inte spara',
-}
+import { DrawingIcon, ExportIcon, SettingsIcon, TagIcon, TrashIcon, ChevronRightIcon } from '../components/icons'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -27,6 +21,7 @@ export default function ProjectDetailPage() {
     busy: false,
     error: null,
   })
+  const [showSettings, setShowSettings] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const drawings = useLiveQuery(
@@ -42,10 +37,20 @@ export default function ProjectDetailPage() {
         .then((p) => p[0]),
     [projectId],
   )
-  const roomCount = useLiveQuery(
-    () => db.rooms.where('projectId').equals(projectId ?? '').count(),
+  const rooms = useLiveQuery(() => db.rooms.where('projectId').equals(projectId ?? '').toArray(), [projectId])
+  const roomIdsKey = (rooms ?? []).map((r) => r.id).join(',')
+  const records = useLiveQuery(
+    () => db.inventoryRecords.where('roomId').anyOf(roomIdsKey ? roomIdsKey.split(',') : []).toArray(),
+    [roomIdsKey],
+  )
+  const completedCount = (records ?? []).filter((r) =>
+    r.rows.some((row) => row.rivning.trim() || row.materials.length > 0),
+  ).length
+  const tagCount = useLiveQuery(
+    () => db.materialTags.where('projectId').equals(projectId ?? '').count(),
     [projectId],
   )
+
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
@@ -112,9 +117,7 @@ export default function ProjectDetailPage() {
 
   const handleDeleteDrawing = async (drawingId: string, fileName: string) => {
     if (
-      !confirm(
-        `Ta bort ritningen "${fileName}"? Rum och inventering som hör till dess sidor tas bort permanent.`,
-      )
+      !confirm(`Ta bort ritningen "${fileName}"? Rum och inventering som hör till dess sidor tas bort permanent.`)
     ) {
       return
     }
@@ -126,78 +129,82 @@ export default function ProjectDetailPage() {
     await db.projects.update(projectId, { roomNumberPattern: pattern, updatedAt: Date.now() })
   }
 
+  const roomCount = rooms?.length ?? 0
+  const progressPct = roomCount > 0 ? Math.round((completedCount / roomCount) * 100) : 0
+  const currentPatternLabel =
+    ROOM_NUMBER_PRESETS.find((p) => p.value === project.roomNumberPattern)?.shortLabel ?? 'Anpassat'
+
   return (
     <>
       <header className="app-header">
         <button className="btn-ghost btn tap-target" onClick={() => navigate('/')} aria-label="Tillbaka">
-          ← Projekt
+          ←
         </button>
-        <span style={{ fontSize: '0.8rem', opacity: 0.85 }}>{STATUS_LABEL[status]}</span>
+        <input
+          className="header-title-input"
+          value={name ?? ''}
+          aria-label="Projektnamn"
+          onChange={(e) => {
+            setNameTouched(true)
+            setName(e.target.value)
+          }}
+        />
+        <span className="save-dot" data-status={status} aria-hidden="true" />
       </header>
-      <main className="app-main">
-        <div className="field" style={{ marginBottom: 20 }}>
-          <label htmlFor="project-name">Projektnamn</label>
-          <input
-            id="project-name"
-            value={name ?? ''}
-            onChange={(e) => {
-              setNameTouched(true)
-              setName(e.target.value)
-            }}
-          />
-        </div>
-
-        <section className="card" style={{ marginBottom: 12 }}>
-          <strong>Inställningar</strong>
-          <div className="field" style={{ marginTop: 10 }}>
-            <label htmlFor="room-pattern">Rumsnummerformat i ritningarna</label>
-            <select
-              id="room-pattern"
-              value={project.roomNumberPattern}
-              onChange={(e) => void handlePatternChange(e.target.value)}
-            >
-              {ROOM_NUMBER_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <span className="field-hint">
-              Styr hur appen känner igen rumsnummer. Redan uppladdade ritningar uppdateras inte automatiskt –
-              tryck "Hitta rum" igen i visaren efter en ändring.
-            </span>
+      <main className="app-main project-detail">
+        <button
+          className="primary-action-card"
+          onClick={() =>
+            firstPage
+              ? navigate(`/project/${projectId}/viewer/${firstPage.id}`)
+              : fileInputRef.current?.click()
+          }
+        >
+          <div className="primary-action-icon">
+            <DrawingIcon width={26} height={26} />
           </div>
-        </section>
-
-        <section className="card" style={{ marginBottom: 12 }}>
-          <strong>Ritningar</strong>
-          <p className="field-hint">
-            Ladda upp en eller flera PDF-ritningar. Nivå ("PLAN XX") tolkas automatiskt – går att döpa om i
-            visaren.
-          </p>
-          <div className="upload-row">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              multiple
-              id="drawing-upload"
-              style={{ display: 'none' }}
-              onChange={(e) => handleFilesSelected(e.target.files)}
-            />
-            <button
-              className="btn btn-secondary"
-              disabled={importState.busy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {importState.busy ? 'Läser in…' : 'Ladda upp ritning(ar)'}
-            </button>
-            {firstPage && (
-              <button className="btn btn-primary" onClick={() => navigate(`/project/${projectId}/viewer/${firstPage.id}`)}>
-                Öppna ritningsvisare
-              </button>
+          <div className="primary-action-text">
+            <strong>{firstPage ? 'Öppna ritningsvisare' : 'Ladda upp en ritning för att börja'}</strong>
+            {roomCount > 0 ? (
+              <div className="progress-row">
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                </div>
+                <span className="field-hint">
+                  {completedCount}/{roomCount} rum klara
+                </span>
+              </div>
+            ) : (
+              <span className="field-hint">
+                {firstPage ? 'Rumstaggar tolkas automatiskt ur ritningen' : 'PDF-ritning med rumstaggar'}
+              </span>
             )}
           </div>
+          <ChevronRightIcon className="primary-action-chevron" />
+        </button>
+
+        <section className="card" style={{ marginBottom: 16 }}>
+          <div className="section-heading">
+            <DrawingIcon width={18} height={18} />
+            <strong>Ritningar</strong>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            multiple
+            id="drawing-upload"
+            style={{ display: 'none' }}
+            onChange={(e) => handleFilesSelected(e.target.files)}
+          />
+          <button
+            className="btn btn-secondary"
+            style={{ marginTop: 10 }}
+            disabled={importState.busy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importState.busy ? 'Läser in…' : '+ Ladda upp ritning(ar)'}
+          </button>
           {importState.error && (
             <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
               {importState.error}
@@ -208,13 +215,13 @@ export default function ProjectDetailPage() {
               {drawings.map((d) => (
                 <div key={d.id} className="drawing-list-item">
                   <span>{d.fileName}</span>
-                  <span>{d.pageCount} sidor</span>
+                  <span className="field-hint">{d.pageCount} sidor</span>
                   <button
                     className="drawing-delete-btn tap-target"
                     aria-label={`Ta bort ${d.fileName}`}
                     onClick={() => void handleDeleteDrawing(d.id, d.fileName)}
                   >
-                    🗑
+                    <TrashIcon width={16} height={16} />
                   </button>
                 </div>
               ))}
@@ -222,37 +229,69 @@ export default function ProjectDetailPage() {
           )}
         </section>
 
-        <section className="card" style={{ marginBottom: 12 }}>
-          <strong>Rum</strong>
-          <p className="field-hint">
-            {roomCount
-              ? `${roomCount} rum hittade. Öppna ritningsvisaren och tryck på en rumstagg för att inventera.`
-              : 'Rumstaggar tolkas automatiskt när en ritning laddas upp.'}
-          </p>
-        </section>
-
-        <section className="card" style={{ marginBottom: 12 }}>
-          <strong>Export</strong>
-          <p className="field-hint">Exportera all inventerad data till Excel.</p>
+        <nav className="settings-list">
           <button
-            className="btn btn-secondary"
-            onClick={handleExport}
-            disabled={exporting || !roomCount}
+            className="settings-list-item"
+            onClick={() => navigate(`/project/${projectId}/tags`)}
+            aria-label={`Materialtaggar, ${tagCount ?? 0} st`}
           >
-            {exporting ? 'Exporterar…' : 'Exportera till Excel'}
+            <TagIcon className="settings-list-icon" />
+            <span className="settings-list-label">Materialtaggar</span>
+            <span className="settings-list-value">{tagCount ?? 0}</span>
+            <ChevronRightIcon className="settings-list-chevron" />
           </button>
-          {exportError && (
-            <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
-              {exportError}
-            </p>
-          )}
-        </section>
+          <button
+            className="settings-list-item"
+            onClick={() => void handleExport()}
+            disabled={exporting || !roomCount}
+            aria-label={exporting ? 'Exporterar…' : 'Exportera till Excel'}
+          >
+            <ExportIcon className="settings-list-icon" />
+            <span className="settings-list-label">{exporting ? 'Exporterar…' : 'Exportera till Excel'}</span>
+            <ChevronRightIcon className="settings-list-chevron" />
+          </button>
+          <button
+            className="settings-list-item"
+            onClick={() => setShowSettings((s) => !s)}
+            aria-expanded={showSettings}
+            aria-label={`Rumsnummerformat, ${currentPatternLabel}`}
+          >
+            <SettingsIcon className="settings-list-icon" />
+            <span className="settings-list-label">Rumsnummerformat</span>
+            <span className="settings-list-value">{currentPatternLabel}</span>
+            <ChevronRightIcon className={`settings-list-chevron${showSettings ? ' open' : ''}`} />
+          </button>
+        </nav>
+        {exportError && (
+          <p className="field-hint" style={{ color: 'var(--color-danger)', marginTop: -8 }}>
+            {exportError}
+          </p>
+        )}
 
-        <button
-          className="btn"
-          style={{ color: 'var(--color-danger)', marginTop: 24 }}
-          onClick={handleDelete}
-        >
+        {showSettings && (
+          <section className="card" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label htmlFor="room-pattern">Rumsnummerformat i ritningarna</label>
+              <select
+                id="room-pattern"
+                value={project.roomNumberPattern}
+                onChange={(e) => void handlePatternChange(e.target.value)}
+              >
+                {ROOM_NUMBER_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                Styr hur appen känner igen rumsnummer. Redan uppladdade ritningar uppdateras inte automatiskt –
+                tryck "Hitta rum" igen i visaren efter en ändring.
+              </span>
+            </div>
+          </section>
+        )}
+
+        <button className="danger-link" onClick={() => void handleDelete()}>
           Ta bort projekt
         </button>
       </main>

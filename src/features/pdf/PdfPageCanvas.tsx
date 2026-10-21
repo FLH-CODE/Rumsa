@@ -18,6 +18,7 @@ export function PdfPageCanvas({
   containerSize,
   zoomScale = 1,
   rooms = [],
+  completedRoomIds,
   onRoomTap,
   addMode = false,
   onCanvasTap,
@@ -29,6 +30,8 @@ export function PdfPageCanvas({
   /** Aktuell zoom-skala från TransformWrapper, används för att hålla rumstaggarnas storlek konstant på skärmen. */
   zoomScale?: number
   rooms?: Room[]
+  /** Rum som redan har inventeringsdata – visas fyllda istället för tomma/ifyllningsbara. */
+  completedRoomIds?: Set<string>
   onRoomTap?: (room: Room) => void
   /** När true: ett klick på ritningen (utanför en befintlig tagg) placerar ett nytt rum där. */
   addMode?: boolean
@@ -109,16 +112,17 @@ export function PdfPageCanvas({
       {viewport &&
         rooms.map((room) => {
           const [x, y] = viewport.convertToViewportPoint(room.tagX, room.tagY)
+          const done = completedRoomIds?.has(room.id)
           return (
             <button
               key={room.id}
-              className="room-hotspot"
+              className={`room-hotspot${done ? ' done' : ''}`}
               style={{ left: x, top: y, transform: `scale(${hotspotScale})` }}
               onClick={(e) => {
                 e.stopPropagation()
                 onRoomTap?.(room)
               }}
-              aria-label={`${room.roomName} ${room.roomNumber}`}
+              aria-label={`${room.roomName} ${room.roomNumber}${done ? ' – ifyllt' : ' – ej ifyllt'}`}
             />
           )
         })}

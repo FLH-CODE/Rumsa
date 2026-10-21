@@ -1,18 +1,20 @@
 import * as XLSX from 'xlsx'
 import { db, type Project } from '../../db'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Yta', 'Rivning', 'Målning/Sort/Kulör']
+const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Yta', 'Rivning', 'Material']
 
 /**
  * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per ytskikt per rum,
  * sorterad per nivå (högst plan först) och rumsnummer. Laddas ner direkt i webbläsaren.
  */
 export async function exportProjectToExcel(project: Project): Promise<void> {
-  const [rooms, levels] = await Promise.all([
+  const [rooms, levels, tags] = await Promise.all([
     db.rooms.where('projectId').equals(project.id).toArray(),
     db.levels.where('projectId').equals(project.id).toArray(),
+    db.materialTags.where('projectId').equals(project.id).toArray(),
   ])
   const levelById = new Map(levels.map((l) => [l.id, l]))
+  const tagById = new Map(tags.map((t) => [t.id, t]))
 
   const records = await db.inventoryRecords
     .where('roomId')
@@ -32,10 +34,18 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
 
   const data: (string | number)[][] = [HEADER]
 
+  const formatMaterials = (row: { materials: { tagId: string; note: string }[] }) =>
+    row.materials
+      .map((m) => {
+        const code = tagById.get(m.tagId)?.code ?? 'Okänd tagg'
+        return m.note ? `${code} (${m.note})` : code
+      })
+      .join('; ')
+
   for (const room of sortedRooms) {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
     const record = recordByRoomId.get(room.id)
-    const rows = record?.rows.filter((row) => row.surface.trim() || row.rivning.trim() || row.malningSortKulor.trim())
+    const rows = record?.rows.filter((row) => row.surface.trim() || row.rivning.trim() || row.materials.length > 0)
 
     if (!rows || rows.length === 0) {
       data.push([levelName, room.roomNumber, room.roomName, '', '', ''])
@@ -43,15 +53,25 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     }
 
     for (const row of rows) {
-      data.push([levelName, room.roomNumber, room.roomName, row.surface, row.rivning, row.malningSortKulor])
+      data.push([levelName, room.roomNumber, room.roomName, row.surface, row.rivning, formatMaterials(row)])
     }
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(data)
-  worksheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 40 }, { wch: 30 }]
+  worksheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 40 }, { wch: 40 }]
 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventering')
+
+  if (tags.length > 0) {
+    const legendData: (string | number)[][] = [
+      ['Kod', 'Beskrivning'],
+      ...tags.sort((a, b) => a.code.localeCompare(b.code, 'sv')).map((t) => [t.code, t.description]),
+    ]
+    const legendSheet = XLSX.utils.aoa_to_sheet(legendData)
+    legendSheet['!cols'] = [{ wch: 16 }, { wch: 50 }]
+    XLSX.utils.book_append_sheet(workbook, legendSheet, 'Materialtaggar')
+  }
 
   const dateStamp = new Date().toISOString().slice(0, 10)
   const safeName = project.name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Rumsa'

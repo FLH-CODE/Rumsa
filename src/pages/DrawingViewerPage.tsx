@@ -45,6 +45,20 @@ export default function DrawingViewerPage() {
     () => (currentPage ? db.rooms.where('drawingPageId').equals(currentPage.id).toArray() : []),
     [currentPage?.id],
   )
+  const roomIdsKey = (rooms ?? []).map((r) => r.id).join(',')
+  const records = useLiveQuery(
+    () => db.inventoryRecords.where('roomId').anyOf(roomIdsKey ? roomIdsKey.split(',') : []).toArray(),
+    [roomIdsKey],
+  )
+  const completedRoomIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const record of records ?? []) {
+      if (record.rows.some((row) => row.rivning.trim() || row.materials.length > 0)) {
+        set.add(record.roomId)
+      }
+    }
+    return set
+  }, [records])
 
   const handleDetectRooms = async () => {
     if (!doc || !currentPage || !projectId) return
@@ -124,6 +138,7 @@ export default function DrawingViewerPage() {
           />
           <span className="viewer-page-count">
             Sida {currentIndex + 1} av {sortedPages.length}
+            {rooms && rooms.length > 0 && ` · ${completedRoomIds.size}/${rooms.length} rum klara`}
           </span>
         </div>
         <button
@@ -185,6 +200,7 @@ export default function DrawingViewerPage() {
                   containerSize={mainSize}
                   zoomScale={zoomScale}
                   rooms={rooms ?? []}
+                  completedRoomIds={completedRoomIds}
                   onRoomTap={setSelectedRoom}
                   addMode={addRoomMode}
                   onCanvasTap={(x, y) => void handleCanvasTap(x, y)}

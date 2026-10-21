@@ -10,6 +10,8 @@
   --color-primary: #164e63;
   --color-primary-contrast: #ffffff;
   --color-danger: #b3261e;
+  --color-success: #2f8f5b;
+  --color-success-dark: #246f47;
   --radius-md: 10px;
   --radius-lg: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -66,6 +68,21 @@ a {
   color: inherit;
 }
 
+/* Egen fokus-ring istället för webbläsarens standard (syns annars som en grov orange kant) –
+   tangentbord/skärmläsare behöver fortfarande en tydlig indikation, bara en snyggare en. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(22, 78, 99, 0.18);
+}
+
 /* Alla interaktiva ytor ska ha ett bekvämt touch-mål. */
 .tap-target {
   min-height: 44px;
@@ -106,11 +123,22 @@ a {
   font-weight: 600;
   font-size: 0.95rem;
   min-height: 44px;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.12s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  transform: none;
 }
 
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-primary-contrast);
+  box-shadow: 0 2px 6px rgba(22, 78, 99, 0.3);
 }
 
 .btn-ghost {
@@ -124,6 +152,18 @@ a {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.section-heading svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
 }
 
 .card-list {
@@ -462,13 +502,25 @@ a {
   margin-left: -18px;
   margin-top: -18px;
   border-radius: 50%;
-  background: rgba(239, 163, 15, 0.4);
-  border: 2px solid #efa30f;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2.5px solid #efa30f;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s ease;
 }
 
 .room-hotspot:active {
-  background: rgba(239, 163, 15, 0.7);
+  background: rgba(239, 163, 15, 0.5);
+}
+
+/* Fyllt istället för tomt när rummet redan har inventeringsdata – syns på håll vilka rum som
+   fortfarande väntar på att fyllas i. */
+.room-hotspot.done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.room-hotspot.done:active {
+  background: var(--color-success-dark);
 }
 
 .viewer-toolbar {
@@ -685,4 +737,342 @@ a {
 
 .material-suggestions li button:active {
   background: var(--color-bg);
+}
+
+.material-suggestion-desc {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  margin-left: 4px;
+}
+
+/* --- Materialreferenser (taggar på en rad) --- */
+
+.material-ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.material-ref-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.material-ref-chip strong {
+  white-space: nowrap;
+}
+
+.material-ref-note {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.material-ref-remove {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+}
+
+.material-ref-remove:active {
+  background: var(--color-bg);
+  color: var(--color-danger);
+}
+
+.material-add-btn {
+  align-self: flex-start;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 6px 2px;
+  min-height: 36px;
+}
+
+.tag-quick-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tag-quick-add-note {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  min-height: 44px;
+  background: var(--color-surface);
+}
+
+.tag-quick-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- Taggchip (fristående, t.ex. i framtida sammanhang) --- */
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* --- Taggöversikt --- */
+
+.tag-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.tag-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tag-card-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Footer i inventeringsformuläret --- */
+
+.inventory-sheet-footer {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-ghost-light {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.save-status[data-status='error'] {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+/* --- Projektkort: pil + papperskorg --- */
+
+.project-card-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+/* --- Header med redigerbart namn + sparstatus-prick --- */
+
+.header-title-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-primary-contrast);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 6px 4px;
+}
+
+.header-title-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.save-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.save-dot[data-status='saving'] {
+  background: rgba(255, 255, 255, 0.6);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.save-dot[data-status='saved'] {
+  background: #6fcf97;
+}
+
+.save-dot[data-status='error'] {
+  background: #ff8a80;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* --- Projektsida: primärt åtgärdskort --- */
+
+.project-detail {
+  padding-top: 20px;
+}
+
+.primary-action-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 20px;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(22, 78, 99, 0.35);
+}
+
+.primary-action-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.primary-action-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.primary-action-text strong {
+  font-size: 1.05rem;
+}
+
+.primary-action-text .field-hint {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.primary-action-chevron {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #6fcf97;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* --- Inställningslista (grupperad, app-liknande) --- */
+
+.settings-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.settings-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.settings-list-item:last-child {
+  border-bottom: none;
+}
+
+.settings-list-item:active {
+  background: var(--color-bg);
+}
+
+.settings-list-icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.settings-list-label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-list-value {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-list-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  transition: transform 0.15s ease;
+}
+
+.settings-list-chevron.open {
+  transform: rotate(90deg);
+}
+
+.danger-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  padding: 14px;
+  margin-top: 8px;
 }

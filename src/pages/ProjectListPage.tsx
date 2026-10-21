@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { db, createId, type Project } from '../db'
 import { deleteProjectCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
+import { TrashIcon, ChevronRightIcon } from '../components/icons'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
@@ -42,6 +43,7 @@ export default function ProjectListPage() {
                     <span>Uppdaterad {new Date(project.updatedAt).toLocaleDateString('sv-SE')}</span>
                   </span>
                 </button>
+                <ChevronRightIcon className="project-card-chevron" />
                 <button
                   className="project-delete-btn tap-target"
                   aria-label={`Ta bort ${project.name}`}
@@ -50,7 +52,7 @@ export default function ProjectListPage() {
                     void handleDelete(project)
                   }}
                 >
-                  🗑
+                  <TrashIcon width={18} height={18} />
                 </button>
               </div>
             ))}
