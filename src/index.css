@@ -496,21 +496,26 @@ textarea:focus-visible {
   flex: 1;
   display: flex;
   min-height: 0;
+  position: relative;
 }
 
+/* Overlay ovanpå ritningen (som filtersheeten) istället för en flex-granne som trycker undan
+   .viewer-main – annars räknade useElementSize om canvasens tillgängliga yta och renderade om
+   hela ritningen (synligt "hopp") varje gång sidofältet fälldes in/ut. */
 .viewer-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
   width: 112px;
-  flex-shrink: 0;
+  z-index: 5;
   overflow-y: auto;
   background: #0f1213;
-  transition: width 0.15s ease, opacity 0.15s ease;
+  box-shadow: 4px 0 14px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
   padding-bottom: var(--safe-bottom);
 }
 
 .viewer-sidebar.collapsed {
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
+  transform: translateX(-100%);
 }
 
 .viewer-thumb {
@@ -559,6 +564,13 @@ textarea:focus-visible {
      gesthantering, vilket kändes hoppigt på styrplatta/pekskärm. */
   touch-action: none;
   overscroll-behavior: contain;
+}
+
+.viewer-main .react-transform-component {
+  /* Ger det panorerade/zoomade innehållet ett eget kompositeringslager – annars kunde
+     webbläsaren falla tillbaka på att rita om alla rumstaggars skuggor för varje musrörelse
+     vid panorering med mus på dator, vilket kändes hackigt jämfört med pekskärm. */
+  will-change: transform;
 }
 
 .pdf-page-stage {
@@ -976,6 +988,17 @@ textarea:focus-visible {
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 0.82rem;
+}
+
+.tag-used-in-chip-button {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-color: var(--color-primary);
+}
+
+.tag-used-in-chip-button:active {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .tag-filter-list {

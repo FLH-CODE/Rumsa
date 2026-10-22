@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../db'
 import { useAutosave } from '../hooks/useAutosave'
 import { importDrawingFile } from '../features/pdf/importDrawing'
+import { syncRoomsForPage } from '../features/pdf/syncRooms'
+import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { DrawingIcon, ExportIcon, SettingsIcon, TagIcon, TrashIcon, ChevronRightIcon } from '../components/icons'
@@ -22,6 +24,7 @@ export default function ProjectDetailPage() {
     error: null,
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [redetecting, setRedetecting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const drawings = useLiveQuery(
@@ -127,6 +130,31 @@ export default function ProjectDetailPage() {
   const handlePatternChange = async (pattern: string) => {
     if (!projectId) return
     await db.projects.update(projectId, { roomNumberPattern: pattern, updatedAt: Date.now() })
+
+    // Körs om automatiskt istället för att kräva ett manuellt tryck på "Hitta rum" i visaren –
+    // annars skulle redan uppladdade ritningar tyst fortsätta använda det gamla formatet.
+    setRedetecting(true)
+    try {
+      const pages = await db.drawingPages.where('projectId').equals(projectId).toArray()
+      const pagesByDrawing = new Map<string, typeof pages>()
+      for (const page of pages) {
+        const group = pagesByDrawing.get(page.drawingId)
+        if (group) group.push(page)
+        else pagesByDrawing.set(page.drawingId, [page])
+      }
+      for (const [drawingId, drawingPages] of pagesByDrawing) {
+        const drawing = await db.drawings.get(drawingId)
+        if (!drawing) continue
+        const buffer = await drawing.pdfBlob.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+        for (const drawingPage of drawingPages) {
+          const page = await pdf.getPage(drawingPage.pageIndex + 1)
+          await syncRoomsForPage(page, drawingPage, pattern)
+        }
+      }
+    } finally {
+      setRedetecting(false)
+    }
   }
 
   const roomCount = rooms?.length ?? 0
@@ -275,6 +303,7 @@ export default function ProjectDetailPage() {
               <select
                 id="room-pattern"
                 value={project.roomNumberPattern}
+                disabled={redetecting}
                 onChange={(e) => void handlePatternChange(e.target.value)}
               >
                 {ROOM_NUMBER_PRESETS.map((p) => (
@@ -284,8 +313,9 @@ export default function ProjectDetailPage() {
                 ))}
               </select>
               <span className="field-hint">
-                Styr hur appen känner igen rumsnummer. Redan uppladdade ritningar uppdateras inte automatiskt –
-                tryck "Hitta rum" igen i visaren efter en ändring.
+                {redetecting
+                  ? 'Söker igenom uppladdade ritningar efter det nya formatet…'
+                  : 'Styr hur appen känner igen rumsnummer. Uppdaterar automatiskt alla uppladdade ritningar vid ändring.'}
               </span>
             </div>
           </section>

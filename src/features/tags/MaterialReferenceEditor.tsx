@@ -2,13 +2,8 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, type MaterialReference, type MaterialTag } from '../../db'
 import { colorForValue } from './colorForValue'
+import { tagLabel } from './tagLabel'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
-
-/** Taggens kod, eller en läsbar platshållare om den saknas/är tom – `??` ensam missar en tagg med
- * tom kod (t.ex. gammal testdata), vilket annars visade upp ett helt namnlöst material. */
-function tagLabel(tag: MaterialTag | undefined): string {
-  return tag?.code?.trim() || 'Okänd tagg'
-}
 
 // Listan är scrollbar (se .material-suggestions), så en hög gräns fungerar fint – man ska kunna
 // se hela taggbiblioteket direkt när man öppnar fältet, inte bara ett fåtal träffar.

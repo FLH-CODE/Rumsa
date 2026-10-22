@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, createId, type MaterialTag } from '../../db'
+import { db, createId, type MaterialTag, type Room } from '../../db'
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { colorForValue } from './colorForValue'
+import { tagLabel } from './tagLabel'
 import { CloseIcon } from '../../components/icons'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 
@@ -12,7 +13,17 @@ import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
  * så att den går att nå och stänga igen utan att tappa det man höll på med underliggande –
  * t.ex. zoom/pan-läget i ritningsvisaren eller ett öppet, osparat rumskort.
  */
-export function TagsOverviewPanel({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+export function TagsOverviewPanel({
+  projectId,
+  onClose,
+  onOpenRoom,
+}: {
+  projectId: string
+  onClose: () => void
+  /** Finns den, går rum i "Används i"-listan att trycka på för att hoppa direkt till rumskortet
+   * istället för att bara visa dem som text. */
+  onOpenRoom?: (room: Room) => void
+}) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).sortBy('code'), [projectId])
   const [editingTag, setEditingTag] = useState<MaterialTag | null>(null)
   const [creating, setCreating] = useState(false)
@@ -61,7 +72,7 @@ export function TagsOverviewPanel({ projectId, onClose }: { projectId: string; o
                 <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
                   <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
                   <span className="tag-card-text">
-                    <strong>{tag.code}</strong>
+                    <strong>{tagLabel(tag)}</strong>
                     <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
                   </span>
                   {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
@@ -79,6 +90,7 @@ export function TagsOverviewPanel({ projectId, onClose }: { projectId: string; o
             setEditingTag(null)
             setCreating(false)
           }}
+          onOpenRoom={onOpenRoom}
         />
       )}
     </div>
@@ -89,10 +101,12 @@ function TagEditSheet({
   projectId,
   tag,
   onClose,
+  onOpenRoom,
 }: {
   projectId: string
   tag: MaterialTag | null
   onClose: () => void
+  onOpenRoom?: (room: Room) => void
 }) {
   const [code, setCode] = useState(tag?.code ?? '')
   const [description, setDescription] = useState(tag?.description ?? '')
@@ -200,12 +214,24 @@ function TagEditSheet({
               <span className="field-hint">Inget rum ännu.</span>
             ) : (
               <div className="tag-used-in-rooms">
-                {roomsUsingTag.map((room) => (
-                  <span key={room.id} className="tag-used-in-chip">
-                    {room.roomNumber}
-                    {room.roomName && ` – ${room.roomName}`}
-                  </span>
-                ))}
+                {roomsUsingTag.map((room) =>
+                  onOpenRoom ? (
+                    <button
+                      key={room.id}
+                      type="button"
+                      className="tag-used-in-chip tag-used-in-chip-button"
+                      onClick={() => onOpenRoom(room)}
+                    >
+                      {room.roomNumber}
+                      {room.roomName && ` – ${room.roomName}`}
+                    </button>
+                  ) : (
+                    <span key={room.id} className="tag-used-in-chip">
+                      {room.roomNumber}
+                      {room.roomName && ` – ${room.roomName}`}
+                    </span>
+                  ),
+                )}
               </div>
             )}
           </div>

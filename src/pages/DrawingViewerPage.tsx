@@ -7,12 +7,12 @@ import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
 import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
-import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForValue } from '../features/tags/colorForValue'
 import { TagIcon, FilterIcon } from '../components/icons'
+import { blurOnEnterEscape } from '../utils/keyboardShortcuts'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -28,7 +28,6 @@ export default function DrawingViewerPage() {
   // av en redan liten yta.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
-  const [detecting, setDetecting] = useState(false)
   const [addRoomMode, setAddRoomMode] = useState(false)
   const [zoomScale, setZoomScale] = useState(1)
   const [mainRef, mainSize] = useElementSize<HTMLDivElement>()
@@ -83,18 +82,6 @@ export default function DrawingViewerPage() {
     return set
   }, [records, filterTagId])
 
-  const handleDetectRooms = async () => {
-    if (!doc || !currentPage || !projectId) return
-    setDetecting(true)
-    try {
-      const project = await db.projects.get(projectId)
-      const page = await doc.getPage(currentPage.pageIndex + 1)
-      await syncRoomsForPage(page, currentPage, project?.roomNumberPattern ?? '^\\d{3,4}$')
-    } finally {
-      setDetecting(false)
-    }
-  }
-
   const handleCanvasTap = async (pdfX: number, pdfY: number) => {
     if (!currentPage || !projectId) return
     setAddRoomMode(false)
@@ -143,6 +130,16 @@ export default function DrawingViewerPage() {
 
   const goPrev = () => currentIndex > 0 && goTo(sortedPages[currentIndex - 1].id)
   const goNext = () => currentIndex < sortedPages.length - 1 && goTo(sortedPages[currentIndex + 1].id)
+
+  // Hoppar direkt till ett annat rums kort (t.ex. från taggöversiktens "Används i"-lista), även
+  // om rummet sitter på en annan sida än den man just nu tittar på.
+  const handleOpenRoom = (targetRoom: Room) => {
+    setShowTagsOverview(false)
+    if (targetRoom.drawingPageId !== currentPage.id) {
+      goTo(targetRoom.drawingPageId)
+    }
+    setSelectedRoom(targetRoom)
+  }
 
   return (
     <div className="viewer-page">
@@ -233,7 +230,12 @@ export default function DrawingViewerPage() {
               // vilket kändes hoppigt/förvirrande. Nu panorerar vanlig scroll, och pinch/ctrl+scroll zoomar.
               wheel={{ wheelDisabled: true }}
               trackPadPanning={{ disabled: false }}
-              onTransform={(_, state) => setZoomScale(state.scale)}
+              // Uppdaterar bara skalan (styr rumstaggarnas motskalning) när den faktiskt ändrats
+              // mer än flyttalsbrus – annars triggar ren panorering (ingen zoomändring) ändå en
+              // ny render per musrörelse, vilket kändes hackigt med mus på dator.
+              onTransform={(_, state) =>
+                setZoomScale((prev) => (Math.abs(prev - state.scale) > 0.001 ? state.scale : prev))
+              }
             >
               <TransformComponent>
                 <PdfPageCanvas
@@ -253,9 +255,6 @@ export default function DrawingViewerPage() {
             </TransformWrapper>
           )}
           <div className="viewer-toolbar">
-            <button className="btn btn-secondary" onClick={handleDetectRooms} disabled={detecting}>
-              {detecting ? 'Letar rum…' : `Hitta rum (${rooms?.length ?? 0})`}
-            </button>
             <button
               className={`btn ${addRoomMode ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setAddRoomMode((on) => !on)}
@@ -267,7 +266,13 @@ export default function DrawingViewerPage() {
       </div>
 
       {selectedRoom && projectId && (
-        <RoomInventorySheet room={selectedRoom} projectId={projectId} onClose={() => setSelectedRoom(null)} />
+        <RoomInventorySheet
+          key={selectedRoom.id}
+          room={selectedRoom}
+          projectId={projectId}
+          onClose={() => setSelectedRoom(null)}
+          onOpenRoom={handleOpenRoom}
+        />
       )}
       {filterSheetOpen && (
         <TagColorFilterSheet
@@ -278,7 +283,11 @@ export default function DrawingViewerPage() {
         />
       )}
       {showTagsOverview && projectId && (
-        <TagsOverviewPanel projectId={projectId} onClose={() => setShowTagsOverview(false)} />
+        <TagsOverviewPanel
+          projectId={projectId}
+          onClose={() => setShowTagsOverview(false)}
+          onOpenRoom={handleOpenRoom}
+        />
       )}
     </div>
   )
@@ -350,6 +359,7 @@ function LevelNameEditor({
         value={name}
         placeholder="Namnge nivå…"
         onChange={(e) => setName(e.target.value)}
+        onKeyDown={blurOnEnterEscape}
       />
       <span className="viewer-page-count">{STATUS_LABEL[status]}</span>
     </>

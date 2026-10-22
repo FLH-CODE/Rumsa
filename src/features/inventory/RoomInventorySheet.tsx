@@ -20,10 +20,14 @@ export function RoomInventorySheet({
   room,
   projectId,
   onClose,
+  onOpenRoom,
 }: {
   room: Room
   projectId: string
   onClose: () => void
+  /** Vidarebefordras till taggöversiktens "Används i"-lista, så man kan hoppa direkt till ett
+   * annat rum som använder samma tagg utan att behöva stänga och leta upp det manuellt. */
+  onOpenRoom?: (room: Room) => void
 }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showTags, setShowTags] = useState(false)
@@ -213,7 +217,9 @@ export function RoomInventorySheet({
           </button>
         </div>
       </div>
-      {showTags && <TagsOverviewPanel projectId={projectId} onClose={() => setShowTags(false)} />}
+      {showTags && (
+        <TagsOverviewPanel projectId={projectId} onClose={() => setShowTags(false)} onOpenRoom={onOpenRoom} />
+      )}
     </div>
   )
 }
