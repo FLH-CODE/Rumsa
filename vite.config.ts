@@ -11,6 +11,9 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registreras manuellt i src/pwaUpdate.ts istället, som även pollar efter uppdateringar
+      // regelbundet – annars upptäcker en flik som hålls öppen länge aldrig en ny version.
+      injectRegister: null,
       includeAssets: ['favicon.png'],
       manifest: {
         name: 'Rumsa – rumsinventering',

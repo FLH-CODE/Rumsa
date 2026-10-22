@@ -62,6 +62,23 @@ export function RoomInventorySheet({
     onClose()
   }
 
+  // Escape ska gå att trycka för att komma ut ur rumskortet, inte bara ur ett enskilt fält –
+  // annars var det enda sättet att stänga att träffa bakgrunden exakt eller trycka "Klar".
+  // Om taggöversikten är öppen ovanpå stängs den först, som i vilken annan modal-stapling som helst.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (showTags) {
+        setShowTags(false)
+      } else {
+        void handleClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTags, roomNumber])
+
   useEffect(() => {
     ensureInventoryRecord(room).catch((err) => {
       setLoadError(err instanceof Error ? err.message : 'Kunde inte öppna rummet.')
@@ -212,9 +229,14 @@ export function RoomInventorySheet({
           <button className="btn btn-ghost-light" onClick={() => setShowTags(true)}>
             Taggar
           </button>
-          <button className="btn btn-primary" onClick={() => void handleClose()}>
-            Klar
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => void handleClose()}>
+              Avbryt
+            </button>
+            <button className="btn btn-primary" onClick={() => void handleClose()}>
+              Klar
+            </button>
+          </div>
         </div>
       </div>
       {showTags && (

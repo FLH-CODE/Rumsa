@@ -423,10 +423,6 @@ textarea:focus-visible {
   z-index: 6;
 }
 
-.viewer-float-btn.back {
-  left: calc(10px + var(--safe-left));
-}
-
 .viewer-float-group {
   position: absolute;
   top: calc(10px + var(--safe-top));
@@ -467,20 +463,46 @@ textarea:focus-visible {
   z-index: 5;
 }
 
+.viewer-level-pill:active {
+  background: rgba(0, 0, 0, 0.7);
+}
+
 .viewer-level-name {
-  border: none;
-  background: transparent;
   color: #fff;
   font-weight: 600;
   font-size: 0.95rem;
   text-align: center;
-  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.viewer-level-name:focus {
-  outline: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 4px;
-  box-shadow: none;
+/* Flik för att dra ut/in sidöversikten, fäst mitt på vänsterkanten som ett bokmärke – hör tydligt
+   ihop med panelen den styr istället för att vara en knapp bland övriga i hörnet. */
+.viewer-sidebar-tab {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 56px;
+  border-radius: 0 10px 10px 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+  z-index: 6;
+}
+
+.viewer-sidebar-tab svg {
+  transition: transform 0.18s ease;
+}
+
+.viewer-sidebar-tab.open svg {
+  transform: rotate(180deg);
 }
 
 .viewer-page-count {

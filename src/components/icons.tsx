@@ -91,3 +91,12 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+export function HomeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 9.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1V9.5" />
+    </svg>
+  )
+}

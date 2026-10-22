@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import { db, createId, type DrawingPage, type Level, type Room } from '../db'
-import { useAutosave, type SaveStatus } from '../hooks/useAutosave'
 import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
@@ -11,15 +10,8 @@ import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForValue } from '../features/tags/colorForValue'
-import { TagIcon, FilterIcon } from '../components/icons'
-import { blurOnEnterEscape } from '../utils/keyboardShortcuts'
-
-const STATUS_LABEL: Record<SaveStatus, string> = {
-  idle: '',
-  saving: 'Sparar…',
-  saved: 'Sparat',
-  error: 'Kunde inte spara',
-}
+import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
+import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
 export default function DrawingViewerPage() {
   const { projectId, drawingPageId } = useParams<{ projectId: string; drawingPageId: string }>()
@@ -34,6 +26,7 @@ export default function DrawingViewerPage() {
   const [showTagsOverview, setShowTagsOverview] = useState(false)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
+  const [renamingLevel, setRenamingLevel] = useState(false)
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -111,13 +104,15 @@ export default function DrawingViewerPage() {
   if (sortedPages.length === 0 || !currentPage) {
     return (
       <div className="viewer-page">
-        <button
-          className="viewer-float-btn back"
-          onClick={() => navigate(`/project/${projectId}`)}
-          aria-label="Tillbaka till projekt"
-        >
-          ✕
-        </button>
+        <div className="viewer-float-group top-right">
+          <button
+            className="viewer-float-btn"
+            onClick={() => navigate(`/project/${projectId}`)}
+            aria-label="Till projektet"
+          >
+            <HomeIcon width={20} height={20} />
+          </button>
+        </div>
         <div className="viewer-empty">Ritningen kunde inte hittas.</div>
       </div>
     )
@@ -141,30 +136,32 @@ export default function DrawingViewerPage() {
     setSelectedRoom(targetRoom)
   }
 
+  const currentLevel = currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null
+
   return (
     <div className="viewer-page">
       {/* Inga sammanhängande verktygsfält – varje kontroll är sin egen flytande knapp direkt
          ovanpå ritningen, så den aldrig tar permanent plats eller känns som en app-bar. */}
       <button
-        className="viewer-float-btn back"
-        onClick={() => navigate(`/project/${projectId}`)}
-        aria-label="Tillbaka till projekt"
+        type="button"
+        className="viewer-level-pill"
+        onClick={() => setRenamingLevel(true)}
+        aria-label={`Namnge nivå, nuvarande namn: ${currentLevel?.name || 'inget'}`}
       >
-        ✕
-      </button>
-      <div className="viewer-level-pill">
-        <LevelNameEditor
-          key={currentPage.id}
-          projectId={projectId!}
-          drawingPage={currentPage}
-          level={currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null}
-        />
+        <strong className="viewer-level-name">{currentLevel?.name || 'Namnge nivå…'}</strong>
         <span className="viewer-page-count">
           Sida {currentIndex + 1} av {sortedPages.length}
           {rooms && rooms.length > 0 && ` · ${completedRoomIds.size}/${rooms.length} rum klara`}
         </span>
-      </div>
+      </button>
       <div className="viewer-float-group top-right">
+        <button
+          className="viewer-float-btn"
+          onClick={() => navigate(`/project/${projectId}`)}
+          aria-label="Till projektet"
+        >
+          <HomeIcon width={20} height={20} />
+        </button>
         <button
           className="viewer-float-btn"
           onClick={() => setFilterSheetOpen(true)}
@@ -180,14 +177,25 @@ export default function DrawingViewerPage() {
         >
           <TagIcon width={20} height={20} />
         </button>
-        <button
-          className="viewer-float-btn"
-          onClick={() => setSidebarOpen((open) => !open)}
-          aria-label="Visa/dölj sidor"
-        >
-          ▤
-        </button>
       </div>
+      {/* Flik i vänsterkanten, som ett bokmärke man drar ut/in – istället för en knapp bland de
+         andra, så den tydligt hör ihop med sidlistan den styr. Pilen pekar åt det håll listan
+         öppnas/stängs. */}
+      <button
+        className={`viewer-sidebar-tab${sidebarOpen ? ' open' : ''}`}
+        onClick={() => setSidebarOpen((open) => !open)}
+        aria-label={sidebarOpen ? 'Dölj sidöversikt' : 'Visa sidöversikt'}
+      >
+        <ChevronRightIcon width={18} height={18} />
+      </button>
+      {renamingLevel && (
+        <LevelRenameSheet
+          projectId={projectId!}
+          drawingPage={currentPage}
+          level={currentLevel}
+          onClose={() => setRenamingLevel(false)}
+        />
+      )}
 
       <div className="viewer-body">
         <aside className={`viewer-sidebar${sidebarOpen ? '' : ' collapsed'}`}>
@@ -304,64 +312,86 @@ function sortPages(pages: DrawingPage[] | undefined, levels: Level[] | undefined
   })
 }
 
-function LevelNameEditor({
+/**
+ * Namnge/döp om nivån för den aktuella sidan – ett enda ställe att göra det på (en tydlig dialog
+ * man öppnar avsiktligt), istället för ett alltid-redigerbart fält som gick att råka trycka in
+ * sig i av misstag utan en tydlig väg ut.
+ */
+function LevelRenameSheet({
   projectId,
   drawingPage,
   level,
+  onClose,
 }: {
   projectId: string
   drawingPage: DrawingPage
   level: Level | null
+  onClose: () => void
 }) {
   const [name, setName] = useState(level?.name ?? '')
+  const [saving, setSaving] = useState(false)
 
-  const status = useAutosave(
-    name,
-    async (value) => {
-      const trimmed = value.trim()
-      if (!trimmed) return
-
+  const handleSave = async () => {
+    const trimmed = name.trim()
+    if (!trimmed || saving) return
+    setSaving(true)
+    try {
       if (level) {
         await db.levels.update(level.id, { name: trimmed })
-        return
-      }
+      } else {
+        // Återanvänd en befintlig nivå med samma namn istället för att alltid skapa en ny – annars
+        // kan man råka skapa dubbletter av t.ex. "PLAN 7" om flera sidor saknar nivå samtidigt.
+        await db.transaction('rw', [db.levels, db.drawingPages, db.rooms], async () => {
+          const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
+          let target = existingLevels.find((l) => l.name.toLowerCase() === trimmed.toLowerCase())
 
-      // Återanvänd en befintlig nivå med samma namn istället för att alltid skapa en ny – annars
-      // kan man råka skapa dubbletter av t.ex. "PLAN 7" om flera sidor saknar nivå samtidigt.
-      await db.transaction('rw', [db.levels, db.drawingPages, db.rooms], async () => {
-        const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
-        let target = existingLevels.find((l) => l.name.toLowerCase() === trimmed.toLowerCase())
-
-        if (!target) {
-          const numericMatch = trimmed.match(/\d+/)
-          target = {
-            id: createId(),
-            projectId,
-            name: trimmed,
-            order: numericMatch ? parseInt(numericMatch[0], 10) : existingLevels.length,
+          if (!target) {
+            const numericMatch = trimmed.match(/\d+/)
+            target = {
+              id: createId(),
+              projectId,
+              name: trimmed,
+              order: numericMatch ? parseInt(numericMatch[0], 10) : existingLevels.length,
+            }
+            await db.levels.add(target)
           }
-          await db.levels.add(target)
-        }
 
-        await db.drawingPages.update(drawingPage.id, { levelId: target.id })
-        // Rum som redan upptäckts på sidan innan nivån fanns pekade på levelId: null – utan den
-        // här uppdateringen skulle de tappa bort nivåkopplingen i t.ex. Excel-exporten.
-        await db.rooms.where('drawingPageId').equals(drawingPage.id).modify({ levelId: target.id })
-      })
-    },
-    700,
-  )
+          await db.drawingPages.update(drawingPage.id, { levelId: target.id })
+          // Rum som redan upptäckts på sidan innan nivån fanns pekade på levelId: null – utan den
+          // här uppdateringen skulle de tappa bort nivåkopplingen i t.ex. Excel-exporten.
+          await db.rooms.where('drawingPageId').equals(drawingPage.id).modify({ levelId: target.id })
+        })
+      }
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
-    <>
-      <input
-        className="viewer-level-name"
-        value={name}
-        placeholder="Namnge nivå…"
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={blurOnEnterEscape}
-      />
-      <span className="viewer-page-count">{STATUS_LABEL[status]}</span>
-    </>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ margin: 0 }}>Namnge nivå</h2>
+        <div className="field">
+          <label htmlFor="level-rename">Namn</label>
+          <input
+            id="level-rename"
+            autoFocus
+            value={name}
+            placeholder="t.ex. Plan 1"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
+          />
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onClose}>
+            Avbryt
+          </button>
+          <button className="btn btn-primary" onClick={() => void handleSave()} disabled={!name.trim() || saving}>
+            {saving ? 'Sparar…' : 'Spara'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

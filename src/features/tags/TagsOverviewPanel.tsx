@@ -51,18 +51,13 @@ export function TagsOverviewPanel({
           <CloseIcon />
         </button>
         <h1 style={{ fontSize: '1.05rem' }}>Materialtaggar</h1>
-        <button className="btn-ghost btn tap-target" onClick={() => setCreating(true)} aria-label="Ny tagg">
-          +
-        </button>
+        <span className="tap-target" aria-hidden="true" />
       </header>
       <main className="app-main">
         {tags === undefined ? null : tags.length === 0 ? (
           <div className="empty-state">
             <p>Inga taggar ännu.</p>
-            <p>
-              Taggar skapas automatiskt när du lägger till material i ett rum, eller tryck + för att
-              förbereda dem i förväg.
-            </p>
+            <p>Taggar skapas automatiskt när du lägger till material i ett rum, eller lägg till en här i förväg.</p>
           </div>
         ) : (
           <div className="card-list">
@@ -81,6 +76,9 @@ export function TagsOverviewPanel({
             })}
           </div>
         )}
+        <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => setCreating(true)}>
+          + Lägg till tagg
+        </button>
       </main>
       {(editingTag || creating) && (
         <TagEditSheet
