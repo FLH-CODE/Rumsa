@@ -4,6 +4,7 @@ import { db, createId, type MaterialTag } from '../../db'
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { colorForValue } from './colorForValue'
 import { CloseIcon } from '../../components/icons'
+import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 
 /**
  * Översikt över projektets materialtaggar – skapa, beskriv och ta bort dem på ett ställe.
@@ -171,7 +172,14 @@ function TagEditSheet({
         <h2 style={{ margin: 0 }}>{tag ? 'Redigera tagg' : 'Ny tagg'}</h2>
         <div className="field">
           <label htmlFor="tag-code">Kod</label>
-          <input id="tag-code" autoFocus value={code} onChange={(e) => setCode(e.target.value)} placeholder="t.ex. Klinker 1" />
+          <input
+            id="tag-code"
+            autoFocus
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="t.ex. Klinker 1"
+            onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
+          />
         </div>
         <div className="field">
           <label htmlFor="tag-description">Beskrivning</label>
@@ -180,6 +188,7 @@ function TagEditSheet({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="t.ex. Klinkerplatta 600x600, ljusgrå"
+            onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
           />
         </div>
         {tag && (

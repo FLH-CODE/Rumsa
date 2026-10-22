@@ -60,7 +60,7 @@ export default function DrawingViewerPage() {
   const completedRoomIds = useMemo(() => {
     const set = new Set<string>()
     for (const record of records ?? []) {
-      if (record.rows.some((row) => row.rivning.trim() || row.materials.length > 0)) {
+      if (record.rows.some((row) => row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim())) {
         set.add(record.roomId)
       }
     }

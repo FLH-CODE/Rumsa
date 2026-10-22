@@ -44,7 +44,7 @@ export default function ProjectDetailPage() {
     [roomIdsKey],
   )
   const completedCount = (records ?? []).filter((r) =>
-    r.rows.some((row) => row.rivning.trim() || row.materials.length > 0),
+    r.rows.some((row) => row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim()),
   ).length
   const tagCount = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId ?? '').count(),

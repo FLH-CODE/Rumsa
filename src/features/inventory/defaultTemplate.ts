@@ -9,6 +9,7 @@ function emptyRows() {
     surface,
     rivning: '',
     materials: [],
+    ovrigt: '',
   }))
 }
 

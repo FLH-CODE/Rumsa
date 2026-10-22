@@ -895,6 +895,12 @@ textarea:focus-visible {
 
 .material-ref-chip strong {
   white-space: nowrap;
+  /* Namnet ska aldrig krympa bort eller klippas – det är noteringen (se nedan) som ska ge med
+     sig och ellipsas om utrymmet inte räcker, aldrig materialets namn. */
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .material-ref-note {
@@ -904,6 +910,9 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  /* Krävs för att text-overflow/ellipsis överhuvudtaget ska kunna krympa den här flex-posten –
+     annars tvingar den (och därmed hela raden, inklusive namnet) ut i overflow istället. */
+  min-width: 0;
 }
 
 .material-ref-remove {
@@ -1047,9 +1056,18 @@ textarea:focus-visible {
 
 /* --- Footer i inventeringsformuläret --- */
 
+/* Sticky längst ner i sheeten – samma knep som .inventory-sheet-header – så "Taggar" (och
+   Ta bort rum/Klar) alltid går att nå utan att behöva scrolla förbi alla rader först. */
 .inventory-sheet-footer {
   justify-content: space-between;
   align-items: center;
+  position: sticky;
+  bottom: calc(-20px - var(--safe-bottom));
+  margin: 0 -16px calc(-20px - var(--safe-bottom));
+  padding: 12px 16px calc(14px + var(--safe-bottom));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  z-index: 2;
 }
 
 .btn-ghost-light {

@@ -1,46 +1,52 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db'
+import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
 
 const MAX_SUGGESTIONS = 6
 
-/** Räknar fram vilka rivningstexter som redan använts i projektet, för att kunna föreslå dem igen. */
-function useRivningSuggestions(projectId: string): string[] {
+type FreeTextField = 'rivning' | 'ovrigt'
+
+/** Räknar fram vilka texter som redan använts i det här fältet i projektet, för att kunna
+ * föreslå dem igen (t.ex. samma rivningstext i flera rum). */
+function useFieldSuggestions(projectId: string, field: FreeTextField): string[] {
   const suggestions = useLiveQuery(async () => {
     const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
       for (const row of record.rows) {
-        const text = row.rivning.trim()
+        const text = row[field].trim()
         if (!text) continue
         counts.set(text, (counts.get(text) ?? 0) + 1)
       }
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([text]) => text)
-  }, [projectId])
+  }, [projectId, field])
   return suggestions ?? []
 }
 
 /**
- * Enkelt textfält med förslag från tidigare ifyllda rivningstexter i projektet. Till skillnad
- * från materialfältet (se MaterialReferenceEditor) är rivningstext fri löptext, inte en
- * återanvändbar tagg – därför bara förslag, ingen separat lagring.
+ * Enkelt textfält med förslag från tidigare ifyllda texter i samma fält (Rivning eller Övrigt)
+ * i projektet. Till skillnad från materialfältet (se MaterialReferenceEditor) är det här fri
+ * löptext, inte en återanvändbar tagg – därför bara förslag, ingen separat lagring.
  */
-export function RivningInput({
+export function RowTextInput({
   projectId,
+  field,
   value,
   onChange,
   placeholder,
   inputId,
 }: {
   projectId: string
+  field: FreeTextField
   value: string
   onChange: (value: string) => void
   placeholder?: string
   inputId?: string
 }) {
-  const suggestions = useRivningSuggestions(projectId)
+  const suggestions = useFieldSuggestions(projectId, field)
   const [open, setOpen] = useState(false)
 
   const filtered = useMemo(() => {
@@ -62,6 +68,7 @@ export function RivningInput({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={blurOnEnterEscape}
         />
       </div>
       {open && filtered.length > 0 && (

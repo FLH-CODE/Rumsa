@@ -64,6 +64,8 @@ export interface InventoryRow {
   surface: string
   rivning: string
   materials: MaterialReference[]
+  /** Fritextfält för övrigt som inte passar in i Rivning/Material, t.ex. anmärkningar om skicket. */
+  ovrigt: string
 }
 
 export interface InventoryRecord {
@@ -137,13 +139,32 @@ class RumsaDB extends Dexie {
           })
       })
 
-    // Normaliserar varje läst post så att `materials` alltid är en array, oavsett vad som
-    // faktiskt ligger lagrat – t.ex. en flik som hann skriva en post med den gamla formen innan
-    // den själv laddade om efter en uppgradering. Utan detta kraschar varje ställe som gör
-    // `row.materials.some/.map/.filter` på en sådan post.
+    // v3: lägger till ett tredje fritextfält per rad ("Övrigt"), vid sidan av Rivning – för
+    // anteckningar som inte passar i någotdera.
+    this.version(3).upgrade(async (tx) => {
+      await tx
+        .table('inventoryRecords')
+        .toCollection()
+        .modify((record: InventoryRecord) => {
+          for (const row of record.rows ?? []) {
+            if (typeof row.ovrigt !== 'string') {
+              row.ovrigt = ''
+            }
+          }
+        })
+    })
+
+    // Normaliserar varje läst post så att `materials` alltid är en array och `ovrigt` alltid en
+    // sträng, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post med
+    // den gamla formen innan den själv laddade om efter en uppgradering. Utan detta kraschar
+    // varje ställe som gör `row.materials.some/.map/.filter` eller läser `row.ovrigt` på en
+    // sådan post.
     this.inventoryRecords.hook('reading', (record: InventoryRecord) => {
-      if (record.rows?.some((row) => !Array.isArray(row.materials))) {
-        return { ...record, rows: record.rows.map((row) => ({ ...row, materials: row.materials ?? [] })) }
+      if (record.rows?.some((row) => !Array.isArray(row.materials) || typeof row.ovrigt !== 'string')) {
+        return {
+          ...record,
+          rows: record.rows.map((row) => ({ ...row, materials: row.materials ?? [], ovrigt: row.ovrigt ?? '' })),
+        }
       }
       return record
     })

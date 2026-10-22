@@ -2,6 +2,13 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, type MaterialReference, type MaterialTag } from '../../db'
 import { colorForValue } from './colorForValue'
+import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
+
+/** Taggens kod, eller en läsbar platshållare om den saknas/är tom – `??` ensam missar en tagg med
+ * tom kod (t.ex. gammal testdata), vilket annars visade upp ett helt namnlöst material. */
+function tagLabel(tag: MaterialTag | undefined): string {
+  return tag?.code?.trim() || 'Okänd tagg'
+}
 
 // Listan är scrollbar (se .material-suggestions), så en hög gräns fungerar fint – man ska kunna
 // se hela taggbiblioteket direkt när man öppnar fältet, inte bara ett fåtal träffar.
@@ -67,10 +74,10 @@ export function MaterialReferenceEditor({
               type="button"
               className="material-ref-chip-main"
               onClick={() => setFormState({ mode: 'edit', ref })}
-              aria-label={`Ändra ${tag?.code ?? 'material'}${ref.note ? `, ${ref.note}` : ''}`}
+              aria-label={`Ändra ${tagLabel(tag)}${ref.note ? `, ${ref.note}` : ''}`}
             >
               <span className="material-color-dot" style={{ background: colorForValue(tag?.code ?? '') }} />
-              <strong>{tag?.code ?? 'Okänd tagg'}</strong>
+              <strong>{tagLabel(tag)}</strong>
               {ref.note && <span className="material-ref-note">{ref.note}</span>}
             </button>
             <button
@@ -189,6 +196,7 @@ function TagQuickAdd({
               setOpen(true)
             }}
             onFocus={() => setOpen(true)}
+            onKeyDown={confirmOnEnterEscape(() => void handleConfirm(), onCancel)}
           />
         </div>
         {open && !selectedTag && filtered.length > 0 && (
@@ -219,6 +227,7 @@ function TagQuickAdd({
         autoFocus={Boolean(initial)}
         value={note}
         onChange={(e) => setNote(e.target.value)}
+        onKeyDown={confirmOnEnterEscape(() => void handleConfirm(), onCancel)}
       />
       <div className="tag-quick-add-actions">
         {onRemove && (

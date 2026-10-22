@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { db, type Project } from '../../db'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Yta', 'Rivning', 'Material']
+const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Yta', 'Rivning', 'Material', 'Övrigt']
 
 /**
  * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per ytskikt per rum,
@@ -37,7 +37,9 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   const formatMaterials = (row: { materials: { tagId: string; note: string }[] }) =>
     row.materials
       .map((m) => {
-        const code = tagById.get(m.tagId)?.code ?? 'Okänd tagg'
+        // `?? 'Okänd tagg'` ensam missar en tagg som finns men har tom kod (t.ex. gammal
+        // testdata) – det gav tidigare ett helt namnlöst material i exporten.
+        const code = tagById.get(m.tagId)?.code?.trim() || 'Okänd tagg'
         return m.note ? `${code} (${m.note})` : code
       })
       .join('; ')
@@ -45,20 +47,38 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   for (const room of sortedRooms) {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
     const record = recordByRoomId.get(room.id)
-    const rows = record?.rows.filter((row) => row.surface.trim() || row.rivning.trim() || row.materials.length > 0)
+    const rows = record?.rows.filter(
+      (row) => row.surface.trim() || row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim(),
+    )
 
     if (!rows || rows.length === 0) {
-      data.push([levelName, room.roomNumber, room.roomName, '', '', ''])
+      data.push([levelName, room.roomNumber, room.roomName, '', '', '', ''])
       continue
     }
 
     for (const row of rows) {
-      data.push([levelName, room.roomNumber, room.roomName, row.surface, row.rivning, formatMaterials(row)])
+      data.push([
+        levelName,
+        room.roomNumber,
+        room.roomName,
+        row.surface,
+        row.rivning,
+        formatMaterials(row),
+        row.ovrigt,
+      ])
     }
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(data)
-  worksheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 40 }, { wch: 40 }]
+  worksheet['!cols'] = [
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 40 },
+    { wch: 40 },
+    { wch: 40 },
+  ]
 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventering')

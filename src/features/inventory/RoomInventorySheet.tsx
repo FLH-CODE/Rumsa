@@ -3,10 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, type InventoryRow, type MaterialReference, type Room } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
-import { RivningInput } from './RivningInput'
+import { RowTextInput } from './RowTextInput'
 import { MaterialReferenceEditor } from '../tags/MaterialReferenceEditor'
 import { TagsOverviewPanel } from '../tags/TagsOverviewPanel'
 import { deleteRoomCascade } from '../data/cascadeDelete'
+import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -98,12 +99,12 @@ export function RoomInventorySheet({
   }
 
   const addRow = () => {
-    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [] }])
+    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [], ovrigt: '' }])
   }
 
   const removeRow = (rowId: string) => {
     const row = rows?.find((r) => r.id === rowId)
-    const hasContent = Boolean(row?.rivning.trim() || row?.materials.length)
+    const hasContent = Boolean(row?.rivning.trim() || row?.materials.length || row?.ovrigt.trim())
     if (hasContent && !confirm('Ta bort raden? Ifylld text för raden försvinner.')) return
     setRows((prev) => prev.filter((r) => r.id !== rowId))
   }
@@ -118,6 +119,7 @@ export function RoomInventorySheet({
               value={roomNumber}
               placeholder="Rumsnummer"
               onChange={(e) => setRoomNumber(e.target.value)}
+              onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnummer"
             />
             <input
@@ -125,6 +127,7 @@ export function RoomInventorySheet({
               value={roomName}
               placeholder="Rumsnamn"
               onChange={(e) => setRoomName(e.target.value)}
+              onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnamn"
             />
           </div>
@@ -150,6 +153,7 @@ export function RoomInventorySheet({
                     placeholder="Yta (t.ex. Golv)"
                     aria-label="Yta"
                     onChange={(e) => updateRow(row.id, { surface: e.target.value })}
+                    onKeyDown={blurOnEnterEscape}
                   />
                   <button
                     className="inventory-remove-row tap-target"
@@ -161,9 +165,10 @@ export function RoomInventorySheet({
                 </div>
                 <div className="field">
                   <label htmlFor={`rivning-${row.id}`}>Rivning</label>
-                  <RivningInput
+                  <RowTextInput
                     inputId={`rivning-${row.id}`}
                     projectId={projectId}
+                    field="rivning"
                     value={row.rivning}
                     onChange={(value) => updateRow(row.id, { rivning: value })}
                     placeholder="t.ex. Bef. golv rivs."
@@ -175,6 +180,17 @@ export function RoomInventorySheet({
                     projectId={projectId}
                     references={row.materials}
                     onChange={(materials) => setRowMaterials(row.id, materials)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`ovrigt-${row.id}`}>Övrigt</label>
+                  <RowTextInput
+                    inputId={`ovrigt-${row.id}`}
+                    projectId={projectId}
+                    field="ovrigt"
+                    value={row.ovrigt}
+                    onChange={(value) => updateRow(row.id, { ovrigt: value })}
+                    placeholder="t.ex. Fuktskada i hörnet"
                   />
                 </div>
               </div>
