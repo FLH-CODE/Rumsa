@@ -18,6 +18,12 @@ const AREA_PATTERN = /^\d+[,.]?\d*\s*m.?$/
  * 80 punkter bort – dimensionssiffror matchar annars samma \d{3,4}-mönster som rumsnummer.
  */
 const MAX_AREA_DISTANCE = 50
+/** Översiktsritningar (t.ex. 1:500) saknar ofta en areatext bredvid rumstaggen – helt giltiga
+ * rum skulle annars förkastas helt eftersom areakravet nedan aldrig uppfylls. Ett rumsnummer
+ * utan nära area godtas istället om det har en text (namnet) mycket nära sig – validerat mot en
+ * riktig översiktsritning där avståndet rumsnummer–namn var 4–7 punkter, långt under de minst
+ * 80 punkter som skiljer en måttsatt sträcka från sin närmaste text (se MAX_AREA_DISTANCE ovan). */
+const MAX_NAME_DISTANCE_WITHOUT_AREA = 20
 
 interface TextLine {
   text: string
@@ -51,7 +57,6 @@ export async function detectRooms(page: PDFPageProxy, roomNumberPattern: RegExp)
     const hasNearbyArea = areaLines.some(
       (area) => Math.hypot(area.x - candidate.x, area.y - candidate.y) <= MAX_AREA_DISTANCE,
     )
-    if (!hasNearbyArea) continue
 
     let best: { text: string; dist: number } | null = null
     for (const line of lines) {
@@ -62,9 +67,10 @@ export async function detectRooms(page: PDFPageProxy, roomNumberPattern: RegExp)
       if (!best || dist < best.dist) best = { text: line.text, dist }
     }
 
-    if (best) {
-      results.push({ roomNumber: candidate.text, roomName: best.text, tagX: candidate.x, tagY: candidate.y })
-    }
+    if (!best) continue
+    if (!hasNearbyArea && best.dist > MAX_NAME_DISTANCE_WITHOUT_AREA) continue
+
+    results.push({ roomNumber: candidate.text, roomName: best.text, tagX: candidate.x, tagY: candidate.y })
   }
 
   return results
