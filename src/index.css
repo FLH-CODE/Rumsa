@@ -712,6 +712,14 @@ textarea:focus-visible {
   max-width: 560px;
 }
 
+/* Bredare kort på dator – med grupper/draghandtag och fyra fält per rad kändes 560px trångt på
+   en skärm som ändå har gott om plats att ge. */
+@media (min-width: 900px) {
+  .inventory-sheet {
+    max-width: 860px;
+  }
+}
+
 .inventory-sheet-header {
   display: flex;
   justify-content: space-between;
@@ -818,6 +826,32 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 16px;
   min-height: 8px;
+  border-radius: var(--radius-md);
+  transition: background-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* Visar tydligt VILKEN grupp en dragen rad skulle hamna i om man släppte nu – annars var det
+   otydligt om man faktiskt var "över" rätt grupp under tiden man drog. */
+.row-bucket.drop-target {
+  background: rgba(22, 78, 99, 0.08);
+  box-shadow: 0 0 0 2px var(--color-primary) inset;
+}
+
+.row-group-add-row {
+  align-self: flex-start;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 6px 2px;
+  min-height: 36px;
+}
+
+/* Elementet som följer pekaren under en dragning (DragOverlay) – lite lyft/skuggat så det känns
+   som att man faktiskt plockat upp raden/gruppen, inte bara flyttat text. */
+.drag-preview {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0.95;
+  cursor: grabbing;
 }
 
 .row-group {

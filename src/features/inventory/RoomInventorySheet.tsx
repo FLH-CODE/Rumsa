@@ -120,9 +120,14 @@ export function RoomInventorySheet({
     updateRow(rowId, { materials })
   }
 
-  const addRow = () => {
-    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [], ovrigt: '', groupId: null }])
-  }
+  const newRow = (groupId: string): InventoryRow => ({
+    id: createId(),
+    surface: '',
+    rivning: '',
+    materials: [],
+    ovrigt: '',
+    groupId,
+  })
 
   const removeRow = (rowId: string) => {
     const row = rows?.find((r) => r.id === rowId)
@@ -170,6 +175,7 @@ export function RoomInventorySheet({
               projectId={projectId}
               rows={rows}
               onRowsChange={(next) => setRows(() => next)}
+              newRow={newRow}
               renderRow={(row) => (
                 <>
                   <div className="inventory-row-header">
@@ -222,9 +228,6 @@ export function RoomInventorySheet({
                 </>
               )}
             />
-            <button className="btn btn-secondary" onClick={addRow}>
-              + Lägg till rad
-            </button>
           </div>
         )}
 

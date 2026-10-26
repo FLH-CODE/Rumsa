@@ -1,13 +1,15 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   useDroppable,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -16,33 +18,35 @@ import { deleteRoomCardGroupCascade } from '../data/cascadeDelete'
 import { GripIcon, ChevronRightIcon, TrashIcon } from '../../components/icons'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 
-/** Pseudo-grupp-id för rader som inte hör till någon namngiven grupp än. */
-const UNGROUPED = '__ungrouped__'
-
-function bucketKeyOf(row: InventoryRow, knownGroupIds: Set<string>): string {
-  return row.groupId && knownGroupIds.has(row.groupId) ? row.groupId : UNGROUPED
-}
+/** Namnet på gruppen som skapas automatiskt första gången ett projekt organiserar rader – den
+ * fångar upp rader som inte sorterats in någon annanstans, så att en rad aldrig kan sakna grupp. */
+const DEFAULT_GROUP_NAME = 'Övrigt'
 
 /** Bygger ordnade hinkar (grupp-id → radernas id i ordning) utifrån radernas nuvarande ordning
- * och groupId, så att varje grupps inbördes ordning bevaras exakt som den visas. */
-function buildBuckets(rows: InventoryRow[], groupIds: string[]): Map<string, string[]> {
+ * och groupId. En rad vars groupId inte matchar någon befintlig grupp (t.ex. null, eller en
+ * grupp som hunnit tas bort) hamnar i den FÖRSTA gruppen – det ska aldrig gå att ha en rad som
+ * inte syns i någon grupp alls. */
+function buildBuckets(rows: InventoryRow[], groups: RoomCardGroup[]): Map<string, string[]> {
   const buckets = new Map<string, string[]>()
-  buckets.set(UNGROUPED, [])
-  for (const id of groupIds) buckets.set(id, [])
+  for (const g of groups) buckets.set(g.id, [])
+  const fallbackId = groups[0]?.id
   for (const row of rows) {
-    const key = bucketKeyOf(row, new Set(groupIds))
-    buckets.get(key)!.push(row.id)
+    const key = row.groupId && buckets.has(row.groupId) ? row.groupId : fallbackId
+    if (key) buckets.get(key)!.push(row.id)
   }
   return buckets
 }
 
-function flattenBuckets(bucketOrder: string[], buckets: Map<string, string[]>, rowById: Map<string, InventoryRow>): InventoryRow[] {
+function flattenBuckets(
+  groupOrder: string[],
+  buckets: Map<string, string[]>,
+  rowById: Map<string, InventoryRow>,
+): InventoryRow[] {
   const result: InventoryRow[] = []
-  for (const key of bucketOrder) {
-    for (const id of buckets.get(key) ?? []) {
+  for (const groupId of groupOrder) {
+    for (const id of buckets.get(groupId) ?? []) {
       const row = rowById.get(id)
       if (!row) continue
-      const groupId = key === UNGROUPED ? null : key
       result.push(row.groupId === groupId ? row : { ...row, groupId })
     }
   }
@@ -51,44 +55,66 @@ function flattenBuckets(bucketOrder: string[], buckets: Map<string, string[]>, r
 
 /**
  * Rumskortets rader, organiserade i namngivna grupper som delas av hela projektet (samma
- * grupper/ordning/ihopfällning oavsett vilket rum man öppnar). Rader går att dra både inom och
- * mellan grupper, och grupperna går att dra om sinsemellan. Utan grupper visas raderna precis
- * som innan – gruppering är helt valfritt.
+ * grupper/ordning/ihopfällning oavsett vilket rum man öppnar). Varje rad hör alltid till en
+ * grupp – en "Övrigt"-grupp skapas automatiskt och fångar upp allt som inte sorterats in någon
+ * annanstans. Rader går att dra både inom och mellan grupper, och grupperna går att dra om
+ * sinsemellan.
  */
 export function GroupedRows({
   projectId,
   rows,
   onRowsChange,
   renderRow,
+  newRow,
 }: {
   projectId: string
   rows: InventoryRow[]
   onRowsChange: (rows: InventoryRow[]) => void
   renderRow: (row: InventoryRow) => ReactNode
+  /** Skapar en ny, tom rad med angivet groupId – anropas från varje grupps egen "Lägg till"-knapp. */
+  newRow: (groupId: string) => InventoryRow
 }) {
   const groups = useLiveQuery(
     () => db.roomCardGroups.where('projectId').equals(projectId).sortBy('order'),
     [projectId],
   )
   const [namingGroup, setNamingGroup] = useState<{ group: RoomCardGroup | null } | null>(null)
+  const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  )
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
-  if (groups === undefined) return null
+  // Varje projekt ska alltid ha minst en grupp att sortera in rader i – annars skulle en rad
+  // kunna sakna grupp helt innan användaren hunnit skapa sin första.
+  useEffect(() => {
+    if (groups && groups.length === 0) {
+      void db.roomCardGroups.add({ id: createId(), projectId, name: DEFAULT_GROUP_NAME, order: 0, collapsed: false })
+    }
+  }, [groups, projectId])
+
+  if (groups === undefined || groups.length === 0) return null
 
   const groupIds = groups.map((g) => g.id)
   const rowById = new Map(rows.map((r) => [r.id, r]))
-  const buckets = buildBuckets(rows, groupIds)
-  const bucketOrder = [UNGROUPED, ...groupIds]
-  const allCollapsed = groups.length > 0 && groups.every((g) => g.collapsed)
+  const buckets = buildBuckets(rows, groups)
+  const allCollapsed = groups.every((g) => g.collapsed)
+  const activeRow = activeDrag?.type === 'row' ? rowById.get(activeDrag.id) : undefined
+  const activeGroup = activeDrag?.type === 'group' ? groups.find((g) => g.id === activeDrag.id) : undefined
 
   const handleToggleAll = () => {
     void Promise.all(groups.map((g) => db.roomCardGroups.update(g.id, { collapsed: !allCollapsed })))
   }
 
+  const handleAddRow = (groupId: string) => {
+    onRowsChange([...rows, newRow(groupId)])
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const type = event.active.data.current?.type
+    if (type === 'row' || type === 'group') setActiveDrag({ type, id: String(event.active.id) })
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDrag(null)
     const { active, over } = event
     if (!over) return
     const activeType = active.data.current?.type
@@ -126,7 +152,7 @@ export function GroupedRows({
     }
     if (targetKey === null) {
       // Släppt direkt på en (eventuellt tom) grupps droppzon, inte på en specifik rad.
-      targetKey = bucketOrder.includes(overId) ? overId : null
+      targetKey = groupIds.includes(overId) ? overId : null
     }
     if (targetKey === null) return
 
@@ -141,26 +167,24 @@ export function GroupedRows({
     targetIds.splice(toIndex, 0, activeId)
     buckets.set(targetKey, targetIds)
 
-    onRowsChange(flattenBuckets(bucketOrder, buckets, rowById))
+    onRowsChange(flattenBuckets(groupIds, buckets, rowById))
   }
-
-  const ungroupedIds = buckets.get(UNGROUPED) ?? []
 
   return (
     <div className="grouped-rows">
-      {groups.length > 0 && (
-        <div className="grouped-rows-toolbar">
-          <button type="button" className="btn-ghost-light" onClick={handleToggleAll}>
-            {allCollapsed ? 'Visa allt' : 'Fäll ihop allt'}
-          </button>
-        </div>
-      )}
+      <div className="grouped-rows-toolbar">
+        <button type="button" className="btn-ghost-light" onClick={handleToggleAll}>
+          {allCollapsed ? 'Visa allt' : 'Fäll ihop allt'}
+        </button>
+      </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        {ungroupedIds.length > 0 && (
-          <RowBucket bucketId={UNGROUPED} rowIds={ungroupedIds} rowById={rowById} renderRow={renderRow} />
-        )}
-
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDrag(null)}
+      >
         <SortableContext items={groupIds} strategy={verticalListSortingStrategy}>
           {groups.map((group) => (
             <GroupSection
@@ -169,15 +193,33 @@ export function GroupedRows({
               rowIds={buckets.get(group.id) ?? []}
               rowById={rowById}
               renderRow={renderRow}
+              onAddRow={() => handleAddRow(group.id)}
               onRename={() => setNamingGroup({ group })}
-              onDelete={() => {
-                if (confirm(`Ta bort gruppen "${group.name}"? Raderna i den finns kvar, men blir ogrupperade.`)) {
-                  void deleteRoomCardGroupCascade(projectId, group.id)
-                }
-              }}
+              onDelete={
+                groups.length > 1
+                  ? () => {
+                      if (confirm(`Ta bort gruppen "${group.name}"? Raderna i den flyttas till en annan grupp.`)) {
+                        void deleteRoomCardGroupCascade(projectId, group.id)
+                      }
+                    }
+                  : undefined
+              }
             />
           ))}
         </SortableContext>
+
+        <DragOverlay>
+          {activeRow && <div className="inventory-row drag-preview">{renderRow(activeRow)}</div>}
+          {activeGroup && (
+            <div className="row-group drag-preview">
+              <div className="row-group-header">
+                <span className="row-group-toggle">
+                  <strong>{activeGroup.name}</strong>
+                </span>
+              </div>
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
 
       <button type="button" className="material-add-btn" onClick={() => setNamingGroup({ group: null })}>
@@ -192,35 +234,6 @@ export function GroupedRows({
           onClose={() => setNamingGroup(null)}
         />
       )}
-    </div>
-  )
-}
-
-function RowBucket({
-  bucketId,
-  rowIds,
-  rowById,
-  renderRow,
-}: {
-  bucketId: string
-  rowIds: string[]
-  rowById: Map<string, InventoryRow>
-  renderRow: (row: InventoryRow) => ReactNode
-}) {
-  const { setNodeRef } = useDroppable({ id: bucketId })
-  return (
-    <div ref={setNodeRef} className="row-bucket">
-      <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-        {rowIds.map((id) => {
-          const row = rowById.get(id)
-          if (!row) return null
-          return (
-            <SortableRow key={id} id={id}>
-              {renderRow(row)}
-            </SortableRow>
-          )
-        })}
-      </SortableContext>
     </div>
   )
 }
@@ -249,6 +262,7 @@ function GroupSection({
   rowIds,
   rowById,
   renderRow,
+  onAddRow,
   onRename,
   onDelete,
 }: {
@@ -256,14 +270,15 @@ function GroupSection({
   rowIds: string[]
   rowById: Map<string, InventoryRow>
   renderRow: (row: InventoryRow) => ReactNode
+  onAddRow: () => void
   onRename: () => void
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   const { attributes, listeners, setNodeRef: setSortableRef, transform, transition, isDragging } = useSortable({
     id: group.id,
     data: { type: 'group' },
   })
-  const { setNodeRef: setDroppableRef } = useDroppable({ id: group.id })
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: group.id })
 
   return (
     <div
@@ -281,30 +296,44 @@ function GroupSection({
           onClick={() => void db.roomCardGroups.update(group.id, { collapsed: !group.collapsed })}
         >
           <ChevronRightIcon className={`row-group-chevron${group.collapsed ? '' : ' open'}`} width={16} height={16} />
-          <span onClick={(e) => { e.stopPropagation(); onRename() }} role="button" tabIndex={0}>
+          <span
+            onClick={(e) => {
+              e.stopPropagation()
+              onRename()
+            }}
+            role="button"
+            tabIndex={0}
+          >
             {group.name}
           </span>
           {rowIds.length > 0 && <span className="field-hint">({rowIds.length})</span>}
         </button>
-        <button type="button" className="row-group-delete" aria-label={`Ta bort gruppen ${group.name}`} onClick={onDelete}>
-          <TrashIcon width={16} height={16} />
-        </button>
+        {onDelete && (
+          <button type="button" className="row-group-delete" aria-label={`Ta bort gruppen ${group.name}`} onClick={onDelete}>
+            <TrashIcon width={16} height={16} />
+          </button>
+        )}
       </div>
       {!group.collapsed && (
-        <div ref={setDroppableRef} className="row-bucket">
-          <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-            {rowIds.map((id) => {
-              const row = rowById.get(id)
-              if (!row) return null
-              return (
-                <SortableRow key={id} id={id}>
-                  {renderRow(row)}
-                </SortableRow>
-              )
-            })}
-          </SortableContext>
-          {rowIds.length === 0 && <p className="field-hint row-group-empty">Dra en rad hit</p>}
-        </div>
+        <>
+          <div ref={setDroppableRef} className={`row-bucket${isOver ? ' drop-target' : ''}`}>
+            <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+              {rowIds.map((id) => {
+                const row = rowById.get(id)
+                if (!row) return null
+                return (
+                  <SortableRow key={id} id={id}>
+                    {renderRow(row)}
+                  </SortableRow>
+                )
+              })}
+            </SortableContext>
+            {rowIds.length === 0 && <p className="field-hint row-group-empty">Dra en rad hit</p>}
+          </div>
+          <button type="button" className="row-group-add-row" onClick={onAddRow}>
+            + Lägg till rad
+          </button>
+        </>
       )}
     </div>
   )
