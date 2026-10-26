@@ -72,15 +72,20 @@ export interface InventoryRow {
   groupId: string | null
 }
 
+/** Vilken av rumskortets tre flikar en grupp/rad hör till. */
+export type RoomCardCategory = 'ytskikt' | 'utrustning'
+
 /**
  * En namngiven grupp att sortera rumskortets rader under (t.ex. "Golv", "Väggar"), för att kunna
  * organisera ett rumskort som har många rader. Delas av hela projektet (inte per rum) – ordningen
  * och om gruppen är ihopfälld är alltså samma oavsett vilket rum man öppnar, så att man kan
- * fälla ihop det man inte jobbar med just nu utan att behöva göra om det för varje rum.
+ * fälla ihop det man inte jobbar med just nu utan att behöva göra om det för varje rum. Ytskikt
+ * och Utrustning har varsin uppsättning grupper (en grupp hör bara till en av flikarna).
  */
 export interface RoomCardGroup {
   id: string
   projectId: string
+  category: RoomCardCategory
   name: string
   order: number
   collapsed: boolean
@@ -89,7 +94,14 @@ export interface RoomCardGroup {
 export interface InventoryRecord {
   id: string
   roomId: string
+  /** Ytskikt-fliken: en rad per ytbehandling (Golv/Vägg/Tak osv.), se InventoryRow. */
   rows: InventoryRow[]
+  /** Utrustning-fliken: samma radstruktur som Ytskikt, fast för utrustningsposter (t.ex.
+   * "Möblering", "Lösa mattor") istället för ytbehandlingar. */
+  equipmentRows: InventoryRow[]
+  /** Funktion-fliken: ett par enkla, fasta fält (inte rader/grupper) – samma fält på varje rum. */
+  antalPersoner: string
+  funktionsbeskrivning: string
   updatedAt: number
 }
 
@@ -108,6 +120,10 @@ export interface InventoryTemplate {
 export interface MaterialTag {
   id: string
   projectId: string
+  /** 'material' för Ytskikt-fliken (ursprungliga "materialtaggar"), 'equipment' för en
+   * motsvarande återanvändbar lista i Utrustning-fliken – samma mekanik, skilda pooler så en
+   * städrutin inte blandas ihop med en klinkertyp i förslagslistorna. */
+  kind: 'material' | 'equipment'
   code: string
   description: string
   colorIndex: number
@@ -193,28 +209,62 @@ class RumsaDB extends Dexie {
           })
       })
 
+    // v5: rumskortet delas upp i tre flikar – Funktion (ett par enkla fält), Utrustning (samma
+    // rad/grupp-system som Ytskikt, fast för utrustningsposter) och Ytskikt (oförändrat, bara
+    // flyttat till en egen flik). Grupper hör nu till en av flikarna (category), och
+    // materialtaggar får en `kind` så Utrustning kan ha en egen, motsvarande taggpool.
+    this.version(5)
+      .stores({
+        roomCardGroups: 'id, projectId, category, order',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('roomCardGroups')
+          .toCollection()
+          .modify((group: RoomCardGroup) => {
+            if (!group.category) group.category = 'ytskikt'
+          })
+        await tx
+          .table('materialTags')
+          .toCollection()
+          .modify((tag: MaterialTag) => {
+            if (!tag.kind) tag.kind = 'material'
+          })
+        await tx
+          .table('inventoryRecords')
+          .toCollection()
+          .modify((record: InventoryRecord) => {
+            if (!Array.isArray(record.equipmentRows)) record.equipmentRows = []
+            if (typeof record.antalPersoner !== 'string') record.antalPersoner = ''
+            if (typeof record.funktionsbeskrivning !== 'string') record.funktionsbeskrivning = ''
+          })
+      })
+
     // Normaliserar varje läst post så att `materials` alltid är en array, `ovrigt` alltid en
     // sträng och `groupId` alltid finns (null eller en sträng), oavsett vad som faktiskt ligger
     // lagrat – t.ex. en flik som hann skriva en post med den gamla formen innan den själv laddade
     // om efter en uppgradering. Utan detta kraschar varje ställe som gör
     // `row.materials.some/.map/.filter` eller läser `row.ovrigt`/`row.groupId` på en sådan post.
+    // Samma sak för `equipmentRows`/`antalPersoner`/`funktionsbeskrivning` på själva posten.
+    const normalizeRows = (rows: InventoryRow[]) =>
+      rows.map((row) => ({ ...row, materials: row.materials ?? [], ovrigt: row.ovrigt ?? '', groupId: row.groupId ?? null }))
+    const rowsNeedNormalizing = (rows: InventoryRow[] | undefined) =>
+      rows?.some(
+        (row) => !Array.isArray(row.materials) || typeof row.ovrigt !== 'string' || typeof row.groupId === 'undefined',
+      ) ?? false
+
     this.inventoryRecords.hook('reading', (record: InventoryRecord) => {
-      if (
-        record.rows?.some(
-          (row) => !Array.isArray(row.materials) || typeof row.ovrigt !== 'string' || typeof row.groupId === 'undefined',
-        )
-      ) {
-        return {
-          ...record,
-          rows: record.rows.map((row) => ({
-            ...row,
-            materials: row.materials ?? [],
-            ovrigt: row.ovrigt ?? '',
-            groupId: row.groupId ?? null,
-          })),
-        }
+      const needsRows = rowsNeedNormalizing(record.rows)
+      const needsEquipmentRows = !Array.isArray(record.equipmentRows) || rowsNeedNormalizing(record.equipmentRows)
+      const needsFunction = typeof record.antalPersoner !== 'string' || typeof record.funktionsbeskrivning !== 'string'
+      if (!needsRows && !needsEquipmentRows && !needsFunction) return record
+      return {
+        ...record,
+        rows: needsRows ? normalizeRows(record.rows ?? []) : record.rows,
+        equipmentRows: needsEquipmentRows ? normalizeRows(record.equipmentRows ?? []) : record.equipmentRows,
+        antalPersoner: record.antalPersoner ?? '',
+        funktionsbeskrivning: record.funktionsbeskrivning ?? '',
       }
-      return record
     })
 
     // Om databasen uppgraderas i en annan flik (t.ex. efter en ny deploy) ska den här fliken

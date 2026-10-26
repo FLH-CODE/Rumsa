@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { db, createId, type InventoryRow, type RoomCardGroup } from '../../db'
+import { db, createId, type InventoryRow, type RoomCardCategory, type RoomCardGroup } from '../../db'
 import { deleteRoomCardGroupCascade } from '../data/cascadeDelete'
 import { GripIcon, ChevronRightIcon, TrashIcon } from '../../components/icons'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
@@ -62,34 +62,45 @@ function flattenBuckets(
  */
 export function GroupedRows({
   projectId,
+  category,
   rows,
   onRowsChange,
   renderRow,
   newRow,
 }: {
   projectId: string
+  /** Vilken flik grupperna hör till – Ytskikt och Utrustning har varsin uppsättning grupper. */
+  category: RoomCardCategory
   rows: InventoryRow[]
   onRowsChange: (rows: InventoryRow[]) => void
   renderRow: (row: InventoryRow) => ReactNode
   /** Skapar en ny, tom rad med angivet groupId – anropas från varje grupps egen "Lägg till"-knapp. */
   newRow: (groupId: string) => InventoryRow
 }) {
-  const groups = useLiveQuery(
+  const allGroups = useLiveQuery(
     () => db.roomCardGroups.where('projectId').equals(projectId).sortBy('order'),
     [projectId],
   )
+  const groups = allGroups?.filter((g) => g.category === category)
   const [namingGroup, setNamingGroup] = useState<{ group: RoomCardGroup | null } | null>(null)
   const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
-  // Varje projekt ska alltid ha minst en grupp att sortera in rader i – annars skulle en rad
-  // kunna sakna grupp helt innan användaren hunnit skapa sin första.
+  // Varje projekt ska alltid ha minst en grupp per flik att sortera in rader i – annars skulle
+  // en rad kunna sakna grupp helt innan användaren hunnit skapa sin första.
   useEffect(() => {
     if (groups && groups.length === 0) {
-      void db.roomCardGroups.add({ id: createId(), projectId, name: DEFAULT_GROUP_NAME, order: 0, collapsed: false })
+      void db.roomCardGroups.add({
+        id: createId(),
+        projectId,
+        category,
+        name: DEFAULT_GROUP_NAME,
+        order: 0,
+        collapsed: false,
+      })
     }
-  }, [groups, projectId])
+  }, [groups, projectId, category])
 
   if (groups === undefined || groups.length === 0) return null
 
@@ -199,7 +210,7 @@ export function GroupedRows({
                 groups.length > 1
                   ? () => {
                       if (confirm(`Ta bort gruppen "${group.name}"? Raderna i den flyttas till en annan grupp.`)) {
-                        void deleteRoomCardGroupCascade(projectId, group.id)
+                        void deleteRoomCardGroupCascade(projectId, group.id, category)
                       }
                     }
                   : undefined
@@ -229,6 +240,7 @@ export function GroupedRows({
       {namingGroup && (
         <GroupNameSheet
           projectId={projectId}
+          category={category}
           group={namingGroup.group}
           nextOrder={groups.length}
           onClose={() => setNamingGroup(null)}
@@ -341,11 +353,13 @@ function GroupSection({
 
 function GroupNameSheet({
   projectId,
+  category,
   group,
   nextOrder,
   onClose,
 }: {
   projectId: string
+  category: RoomCardCategory
   group: RoomCardGroup | null
   nextOrder: number
   onClose: () => void
@@ -361,7 +375,14 @@ function GroupNameSheet({
       if (group) {
         await db.roomCardGroups.update(group.id, { name: trimmed })
       } else {
-        await db.roomCardGroups.add({ id: createId(), projectId, name: trimmed, order: nextOrder, collapsed: false })
+        await db.roomCardGroups.add({
+          id: createId(),
+          projectId,
+          category,
+          name: trimmed,
+          order: nextOrder,
+          collapsed: false,
+        })
       }
       onClose()
     } finally {

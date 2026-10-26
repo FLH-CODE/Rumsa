@@ -28,6 +28,9 @@ export async function ensureInventoryRecord(room: Room): Promise<InventoryRecord
       id: createId(),
       roomId: room.id,
       rows: emptyRows(),
+      equipmentRows: [],
+      antalPersoner: '',
+      funktionsbeskrivning: '',
       updatedAt: Date.now(),
     }
     await db.inventoryRecords.add(record)

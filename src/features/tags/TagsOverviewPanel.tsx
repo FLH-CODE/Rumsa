@@ -7,10 +7,16 @@ import { tagLabel } from './tagLabel'
 import { CloseIcon } from '../../components/icons'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 
+const SECTION_TITLE: Record<MaterialTag['kind'], string> = {
+  material: 'Material (Ytskikt)',
+  equipment: 'Utrustning',
+}
+
 /**
- * Översikt över projektets materialtaggar – skapa, beskriv och ta bort dem på ett ställe.
- * Renderas som en fristående, fullskärms-overlay (fixed position) istället för en vanlig sida
- * så att den går att nå och stänga igen utan att tappa det man höll på med underliggande –
+ * Översikt över projektets tagg-bibliotek – material (Ytskikt) och utrustning (Utrustning) är
+ * skilda pooler men visas i samma översikt, så man slipper leta efter rätt ställe att hantera
+ * dem på. Renderas som en fristående, fullskärms-overlay (fixed position) istället för en vanlig
+ * sida så att den går att nå och stänga igen utan att tappa det man höll på med underliggande –
  * t.ex. zoom/pan-läget i ritningsvisaren eller ett öppet, osparat rumskort.
  */
 export function TagsOverviewPanel({
@@ -26,7 +32,7 @@ export function TagsOverviewPanel({
 }) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).sortBy('code'), [projectId])
   const [editingTag, setEditingTag] = useState<MaterialTag | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [creatingKind, setCreatingKind] = useState<MaterialTag['kind'] | null>(null)
 
   // Hur många rum som refererar varje tagg – så man ser omfattningen direkt i listan, inte bara
   // efter att ha öppnat en enskild tagg.
@@ -35,7 +41,9 @@ export function TagsOverviewPanel({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
-      const tagIds = new Set(record.rows.flatMap((row) => row.materials.map((m) => m.tagId)))
+      const tagIds = new Set(
+        [...record.rows, ...record.equipmentRows].flatMap((row) => row.materials.map((m) => m.tagId)),
+      )
       for (const tagId of tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1)
     }
     return counts
@@ -50,43 +58,49 @@ export function TagsOverviewPanel({
         <button className="btn-ghost btn tap-target" onClick={onClose} aria-label="Stäng">
           <CloseIcon />
         </button>
-        <h1 style={{ fontSize: '1.05rem' }}>Materialtaggar</h1>
+        <h1 style={{ fontSize: '1.05rem' }}>Taggar</h1>
         <span className="tap-target" aria-hidden="true" />
       </header>
       <main className="app-main">
-        {tags === undefined ? null : tags.length === 0 ? (
-          <div className="empty-state">
-            <p>Inga taggar ännu.</p>
-            <p>Taggar skapas automatiskt när du lägger till material i ett rum, eller lägg till en här i förväg.</p>
-          </div>
-        ) : (
-          <div className="card-list">
-            {tags.map((tag) => {
-              const roomCount = roomCountByTag?.get(tag.id) ?? 0
-              return (
-                <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
-                  <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
-                  <span className="tag-card-text">
-                    <strong>{tagLabel(tag)}</strong>
-                    <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
-                  </span>
-                  {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
-                </button>
-              )
-            })}
-          </div>
-        )}
-        <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => setCreating(true)}>
-          + Lägg till tagg
-        </button>
+        {(['material', 'equipment'] as const).map((kind) => {
+          const kindTags = tags?.filter((t) => t.kind === kind)
+          return (
+            <section key={kind} className="tag-section">
+              <h2 className="section-heading-text">{SECTION_TITLE[kind]}</h2>
+              {kindTags === undefined ? null : kindTags.length === 0 ? (
+                <p className="field-hint">Inga taggar ännu.</p>
+              ) : (
+                <div className="card-list">
+                  {kindTags.map((tag) => {
+                    const roomCount = roomCountByTag?.get(tag.id) ?? 0
+                    return (
+                      <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
+                        <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
+                        <span className="tag-card-text">
+                          <strong>{tagLabel(tag)}</strong>
+                          <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
+                        </span>
+                        {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={() => setCreatingKind(kind)}>
+                + Lägg till tagg
+              </button>
+            </section>
+          )
+        })}
       </main>
-      {(editingTag || creating) && (
+      {(editingTag || creatingKind) && (
         <TagEditSheet
           projectId={projectId}
+          kind={editingTag?.kind ?? creatingKind!}
           tag={editingTag}
           onClose={() => {
             setEditingTag(null)
-            setCreating(false)
+            setCreatingKind(null)
           }}
           onOpenRoom={onOpenRoom}
         />
@@ -97,11 +111,13 @@ export function TagsOverviewPanel({
 
 function TagEditSheet({
   projectId,
+  kind,
   tag,
   onClose,
   onOpenRoom,
 }: {
   projectId: string
+  kind: MaterialTag['kind']
   tag: MaterialTag | null
   onClose: () => void
   onOpenRoom?: (room: Room) => void
@@ -120,7 +136,7 @@ function TagEditSheet({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const matchingRoomIds = new Set(
       records
-        .filter((record) => record.rows.some((row) => row.materials.some((m) => m.tagId === tag.id)))
+        .filter((record) => [...record.rows, ...record.equipmentRows].some((row) => row.materials.some((m) => m.tagId === tag.id)))
         .map((record) => record.roomId),
     )
     return [...matchingRoomIds]
@@ -135,13 +151,13 @@ function TagEditSheet({
     setSaving(true)
     setSaveError(null)
     try {
-      // Hela kontrollen + skrivningen i en transaktion så två samtidiga sparanden (eller en
-      // dubbeltryckning) inte kan skapa två taggar med samma kod.
+      // Hela kontrollen + skrivningen i en transaktion så en dubbeltryckning (eller en annan
+      // rad/flik som skapar samma tagg samtidigt) inte kan skapa två taggar med samma kod.
       await db.transaction('rw', db.materialTags, async () => {
         const collision = await db.materialTags
           .where('projectId')
           .equals(projectId)
-          .filter((t) => t.id !== tag?.id && t.code.toLowerCase() === trimmedCode.toLowerCase())
+          .filter((t) => t.id !== tag?.id && t.kind === kind && t.code.toLowerCase() === trimmedCode.toLowerCase())
           .first()
         if (collision) {
           throw new Error(`Taggen "${collision.code}" finns redan.`)
@@ -152,6 +168,7 @@ function TagEditSheet({
           await db.materialTags.add({
             id: createId(),
             projectId,
+            kind,
             code: trimmedCode,
             description: description.trim(),
             colorIndex: 0,
@@ -181,7 +198,9 @@ function TagEditSheet({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ margin: 0 }}>{tag ? 'Redigera tagg' : 'Ny tagg'}</h2>
+        <h2 style={{ margin: 0 }}>
+          {tag ? 'Redigera tagg' : kind === 'material' ? 'Ny materialtagg' : 'Ny utrustningstagg'}
+        </h2>
         <div className="field">
           <label htmlFor="tag-code">Kod</label>
           <input
@@ -189,7 +208,7 @@ function TagEditSheet({
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="t.ex. Klinker 1"
+            placeholder={kind === 'material' ? 't.ex. Klinker 1' : 't.ex. Möblering'}
             onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
           />
         </div>
@@ -199,7 +218,7 @@ function TagEditSheet({
             id="tag-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="t.ex. Klinkerplatta 600x600, ljusgrå"
+            placeholder={kind === 'material' ? 't.ex. Klinkerplatta 600x600, ljusgrå' : 't.ex. Löst inredningspaket'}
             onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
           />
         </div>

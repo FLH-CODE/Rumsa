@@ -7,6 +7,7 @@ import { importDrawingFile } from '../features/pdf/importDrawing'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
+import { isRecordStarted } from '../features/inventory/recordStatus'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { DrawingIcon, ExportIcon, SettingsIcon, TagIcon, TrashIcon, ChevronRightIcon } from '../components/icons'
 
@@ -47,7 +48,7 @@ export default function ProjectDetailPage() {
     [roomIdsKey],
   )
   const completedCount = (records ?? []).filter((r) =>
-    r.rows.some((row) => row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim()),
+    isRecordStarted(r),
   ).length
   const tagCount = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId ?? '').count(),

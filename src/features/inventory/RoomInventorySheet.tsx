@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, createId, type InventoryRow, type MaterialReference, type Room } from '../../db'
+import { db, createId, type InventoryRecord, type InventoryRow, type MaterialReference, type Room } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { RowTextInput } from './RowTextInput'
@@ -15,6 +15,25 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
   saving: 'Sparar…',
   saved: 'Sparat',
   error: 'Kunde inte spara',
+}
+
+type Tab = 'funktion' | 'utrustning' | 'ytskikt'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'funktion', label: 'Funktion' },
+  { id: 'utrustning', label: 'Utrustning' },
+  { id: 'ytskikt', label: 'Ytskikt' },
+]
+
+type Loaded = {
+  recordId: string
+  rows: InventoryRow[]
+  equipmentRows: InventoryRow[]
+  antalPersoner: string
+  funktionsbeskrivning: string
+}
+
+function newEmptyRow(groupId: string): InventoryRow {
+  return { id: createId(), surface: '', rivning: '', materials: [], ovrigt: '', groupId }
 }
 
 export function RoomInventorySheet({
@@ -32,6 +51,7 @@ export function RoomInventorySheet({
 }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showTags, setShowTags] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>('funktion')
 
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
@@ -88,53 +108,63 @@ export function RoomInventorySheet({
 
   const record = useLiveQuery(() => db.inventoryRecords.where('roomId').equals(room.id).first(), [room.id])
 
-  const [loaded, setLoaded] = useState<{ recordId: string; rows: InventoryRow[] } | null>(null)
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
 
   useEffect(() => {
     if (record && record.id !== loaded?.recordId) {
-      setLoaded({ recordId: record.id, rows: record.rows })
+      setLoaded({
+        recordId: record.id,
+        rows: record.rows,
+        equipmentRows: record.equipmentRows,
+        antalPersoner: record.antalPersoner,
+        funktionsbeskrivning: record.funktionsbeskrivning,
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record])
 
-  const rows = loaded?.rows ?? null
-
   const status = useAutosave(
-    rows,
+    loaded,
     async (value) => {
       if (!value || !record) return
-      await db.inventoryRecords.update(record.id, { rows: value, updatedAt: Date.now() })
+      const patch: Partial<InventoryRecord> = {
+        rows: value.rows,
+        equipmentRows: value.equipmentRows,
+        antalPersoner: value.antalPersoner,
+        funktionsbeskrivning: value.funktionsbeskrivning,
+        updatedAt: Date.now(),
+      }
+      await db.inventoryRecords.update(record.id, patch)
     },
     500,
   )
 
-  const setRows = (updater: (prev: InventoryRow[]) => InventoryRow[]) => {
-    setLoaded((prev) => (prev ? { ...prev, rows: updater(prev.rows) } : prev))
+  const setField = <K extends keyof Loaded>(key: K, updater: (prev: Loaded[K]) => Loaded[K]) => {
+    setLoaded((prev) => (prev ? { ...prev, [key]: updater(prev[key]) } : prev))
   }
 
-  const updateRow = (rowId: string, patch: Partial<InventoryRow>) => {
-    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)))
+  /** Delade rad-operationer (ändra/ta bort) för Ytskikt och Utrustning – samma logik, skild data. */
+  function createRowActions(field: 'rows' | 'equipmentRows') {
+    const setRows = (updater: (prev: InventoryRow[]) => InventoryRow[]) => setField(field, updater)
+    return {
+      rows: loaded?.[field] ?? null,
+      setRows,
+      updateRow: (rowId: string, patch: Partial<InventoryRow>) =>
+        setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r))),
+      setRowMaterials: (rowId: string, materials: MaterialReference[]) =>
+        setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, materials } : r))),
+      removeRow: (rowId: string) => {
+        const current = loaded?.[field] ?? []
+        const row = current.find((r) => r.id === rowId)
+        const hasContent = Boolean(row?.rivning.trim() || row?.materials.length || row?.ovrigt.trim())
+        if (hasContent && !confirm('Ta bort raden? Ifylld text för raden försvinner.')) return
+        setRows((prev) => prev.filter((r) => r.id !== rowId))
+      },
+    }
   }
 
-  const setRowMaterials = (rowId: string, materials: MaterialReference[]) => {
-    updateRow(rowId, { materials })
-  }
-
-  const newRow = (groupId: string): InventoryRow => ({
-    id: createId(),
-    surface: '',
-    rivning: '',
-    materials: [],
-    ovrigt: '',
-    groupId,
-  })
-
-  const removeRow = (rowId: string) => {
-    const row = rows?.find((r) => r.id === rowId)
-    const hasContent = Boolean(row?.rivning.trim() || row?.materials.length || row?.ovrigt.trim())
-    if (hasContent && !confirm('Ta bort raden? Ifylld text för raden försvinner.')) return
-    setRows((prev) => prev.filter((r) => r.id !== rowId))
-  }
+  const ytskikt = createRowActions('rows')
+  const utrustning = createRowActions('equipmentRows')
 
   return (
     <div className="modal-backdrop" onClick={() => void handleClose()}>
@@ -163,72 +193,172 @@ export function RoomInventorySheet({
           </span>
         </div>
 
+        <div className="room-tabs">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`room-tab${activeTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {loadError ? (
           <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
             {loadError}
           </p>
-        ) : rows === null ? (
+        ) : loaded === null ? (
           <p className="field-hint">Laddar…</p>
         ) : (
-          <div className="inventory-rows">
-            <GroupedRows
-              projectId={projectId}
-              rows={rows}
-              onRowsChange={(next) => setRows(() => next)}
-              newRow={newRow}
-              renderRow={(row) => (
-                <>
-                  <div className="inventory-row-header">
-                    <input
-                      className="inventory-surface-name"
-                      value={row.surface}
-                      placeholder="Yta (t.ex. Golv)"
-                      aria-label="Yta"
-                      onChange={(e) => updateRow(row.id, { surface: e.target.value })}
-                      onKeyDown={blurOnEnterEscape}
-                    />
-                    <button
-                      className="inventory-remove-row tap-target"
-                      onClick={() => removeRow(row.id)}
-                      aria-label="Ta bort rad"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`rivning-${row.id}`}>Rivning</label>
-                    <RowTextInput
-                      inputId={`rivning-${row.id}`}
-                      projectId={projectId}
-                      field="rivning"
-                      value={row.rivning}
-                      onChange={(value) => updateRow(row.id, { rivning: value })}
-                      placeholder="t.ex. Bef. golv rivs."
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Material</label>
-                    <MaterialReferenceEditor
-                      projectId={projectId}
-                      references={row.materials}
-                      onChange={(materials) => setRowMaterials(row.id, materials)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`ovrigt-${row.id}`}>Övrigt</label>
-                    <RowTextInput
-                      inputId={`ovrigt-${row.id}`}
-                      projectId={projectId}
-                      field="ovrigt"
-                      value={row.ovrigt}
-                      onChange={(value) => updateRow(row.id, { ovrigt: value })}
-                      placeholder="t.ex. Fuktskada i hörnet"
-                    />
-                  </div>
-                </>
-              )}
-            />
-          </div>
+          <>
+            {activeTab === 'funktion' && (
+              <div className="inventory-rows">
+                <div className="field">
+                  <label htmlFor="antal-personer">Antal personer</label>
+                  <input
+                    id="antal-personer"
+                    value={loaded.antalPersoner}
+                    placeholder="t.ex. 12"
+                    onChange={(e) => setField('antalPersoner', () => e.target.value)}
+                    onKeyDown={blurOnEnterEscape}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="funktionsbeskrivning">Funktionsbeskrivning</label>
+                  <input
+                    id="funktionsbeskrivning"
+                    value={loaded.funktionsbeskrivning}
+                    placeholder="t.ex. Kommunikationsyta"
+                    onChange={(e) => setField('funktionsbeskrivning', () => e.target.value)}
+                    onKeyDown={blurOnEnterEscape}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'utrustning' && (
+              <div className="inventory-rows">
+                <GroupedRows
+                  projectId={projectId}
+                  category="utrustning"
+                  rows={utrustning.rows ?? []}
+                  onRowsChange={(next) => utrustning.setRows(() => next)}
+                  newRow={newEmptyRow}
+                  renderRow={(row) => (
+                    <>
+                      <div className="inventory-row-header">
+                        <input
+                          className="inventory-surface-name"
+                          value={row.surface}
+                          placeholder="Namn (t.ex. Möblering)"
+                          aria-label="Namn"
+                          onChange={(e) => utrustning.updateRow(row.id, { surface: e.target.value })}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                        <button
+                          className="inventory-remove-row tap-target"
+                          onClick={() => utrustning.removeRow(row.id)}
+                          aria-label="Ta bort rad"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="field">
+                        <label>Utrustning</label>
+                        <MaterialReferenceEditor
+                          projectId={projectId}
+                          kind="equipment"
+                          references={row.materials}
+                          onChange={(materials) => utrustning.setRowMaterials(row.id, materials)}
+                          addLabel="+ Lägg till utrustning"
+                          searchPlaceholder="Sök eller skapa post, t.ex. Möblering"
+                          removeLabel="Ta bort utrustning"
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`utrustning-ovrigt-${row.id}`}>Övrigt</label>
+                        <RowTextInput
+                          inputId={`utrustning-ovrigt-${row.id}`}
+                          projectId={projectId}
+                          field="ovrigt"
+                          value={row.ovrigt}
+                          onChange={(value) => utrustning.updateRow(row.id, { ovrigt: value })}
+                          placeholder="t.ex. Saknas, ska kompletteras"
+                        />
+                      </div>
+                    </>
+                  )}
+                />
+              </div>
+            )}
+
+            {activeTab === 'ytskikt' && (
+              <div className="inventory-rows">
+                <GroupedRows
+                  projectId={projectId}
+                  category="ytskikt"
+                  rows={ytskikt.rows ?? []}
+                  onRowsChange={(next) => ytskikt.setRows(() => next)}
+                  newRow={newEmptyRow}
+                  renderRow={(row) => (
+                    <>
+                      <div className="inventory-row-header">
+                        <input
+                          className="inventory-surface-name"
+                          value={row.surface}
+                          placeholder="Yta (t.ex. Golv)"
+                          aria-label="Yta"
+                          onChange={(e) => ytskikt.updateRow(row.id, { surface: e.target.value })}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                        <button
+                          className="inventory-remove-row tap-target"
+                          onClick={() => ytskikt.removeRow(row.id)}
+                          aria-label="Ta bort rad"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`rivning-${row.id}`}>Rivning</label>
+                        <RowTextInput
+                          inputId={`rivning-${row.id}`}
+                          projectId={projectId}
+                          field="rivning"
+                          value={row.rivning}
+                          onChange={(value) => ytskikt.updateRow(row.id, { rivning: value })}
+                          placeholder="t.ex. Bef. golv rivs."
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Material</label>
+                        <MaterialReferenceEditor
+                          projectId={projectId}
+                          kind="material"
+                          references={row.materials}
+                          onChange={(materials) => ytskikt.setRowMaterials(row.id, materials)}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`ovrigt-${row.id}`}>Övrigt</label>
+                        <RowTextInput
+                          inputId={`ovrigt-${row.id}`}
+                          projectId={projectId}
+                          field="ovrigt"
+                          value={row.ovrigt}
+                          onChange={(value) => ytskikt.updateRow(row.id, { ovrigt: value })}
+                          placeholder="t.ex. Fuktskada i hörnet"
+                        />
+                      </div>
+                    </>
+                  )}
+                />
+              </div>
+            )}
+          </>
         )}
 
         <div className="modal-actions inventory-sheet-footer">

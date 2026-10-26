@@ -170,6 +170,19 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
+.tag-section {
+  margin-bottom: 24px;
+}
+
+.tag-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-heading-text {
+  font-size: 1rem;
+  margin: 0 0 10px;
+}
+
 .card-list {
   display: flex;
   flex-direction: column;
@@ -732,6 +745,28 @@ textarea:focus-visible {
   padding: 20px 16px 12px;
   background: var(--color-surface);
   z-index: 2;
+}
+
+.room-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.room-tab {
+  flex: 1;
+  padding: 10px 4px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+}
+
+.room-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .inventory-sheet-title {

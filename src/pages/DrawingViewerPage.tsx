@@ -8,6 +8,7 @@ import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
+import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForValue } from '../features/tags/colorForValue'
 import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
@@ -52,7 +53,7 @@ export default function DrawingViewerPage() {
   const completedRoomIds = useMemo(() => {
     const set = new Set<string>()
     for (const record of records ?? []) {
-      if (record.rows.some((row) => row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim())) {
+      if (isRecordStarted(record)) {
         set.add(record.roomId)
       }
     }

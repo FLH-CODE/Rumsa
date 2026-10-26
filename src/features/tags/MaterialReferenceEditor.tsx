@@ -20,14 +20,28 @@ type FormState = { mode: 'add' } | { mode: 'edit'; ref: MaterialReference }
  */
 export function MaterialReferenceEditor({
   projectId,
+  kind,
   references,
   onChange,
+  addLabel = '+ Lägg till material',
+  searchPlaceholder = 'Sök eller skapa tagg, t.ex. Klinker 1',
+  removeLabel = 'Ta bort material',
 }: {
   projectId: string
+  /** Vilken taggpool referenserna väljs ur – Ytskikt ('material') och Utrustning ('equipment')
+   * har varsin, så en städrutin inte dyker upp bland klinkertyper eller tvärtom. */
+  kind: MaterialTag['kind']
   references: MaterialReference[]
   onChange: (refs: MaterialReference[]) => void
+  addLabel?: string
+  searchPlaceholder?: string
+  removeLabel?: string
 }) {
-  const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).toArray(), [projectId]) ?? []
+  const tags =
+    useLiveQuery(
+      () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.kind === kind).toArray(),
+      [projectId, kind],
+    ) ?? []
   const tagById = new Map(tags.map((t) => [t.id, t]))
   const [formState, setFormState] = useState<FormState | null>(null)
 
@@ -54,7 +68,9 @@ export function MaterialReferenceEditor({
             <TagQuickAdd
               key={ref.id}
               projectId={projectId}
+              kind={kind}
               tags={tags}
+              searchPlaceholder={searchPlaceholder}
               initial={{ tagId: ref.tagId, note: ref.note }}
               onConfirm={(tagId, note) => updateReference(ref.id, tagId, note)}
               onRemove={() => removeReference(ref.id)}
@@ -79,7 +95,7 @@ export function MaterialReferenceEditor({
               type="button"
               className="material-ref-remove"
               onClick={() => removeReference(ref.id)}
-              aria-label="Ta bort material"
+              aria-label={removeLabel}
             >
               ✕
             </button>
@@ -90,13 +106,15 @@ export function MaterialReferenceEditor({
       {formState?.mode === 'add' ? (
         <TagQuickAdd
           projectId={projectId}
+          kind={kind}
           tags={tags}
+          searchPlaceholder={searchPlaceholder}
           onConfirm={addReference}
           onCancel={() => setFormState(null)}
         />
       ) : (
         <button type="button" className="material-add-btn" onClick={() => setFormState({ mode: 'add' })}>
-          + Lägg till material
+          {addLabel}
         </button>
       )}
     </div>
@@ -105,16 +123,20 @@ export function MaterialReferenceEditor({
 
 function TagQuickAdd({
   projectId,
+  kind,
   tags,
   initial,
+  searchPlaceholder,
   onConfirm,
   onRemove,
   onCancel,
 }: {
   projectId: string
+  kind: MaterialTag['kind']
   tags: MaterialTag[]
   /** Förifyller formuläret med en befintlig referens, för redigering istället för tillägg. */
   initial?: { tagId: string; note: string }
+  searchPlaceholder: string
   onConfirm: (tagId: string, note: string) => void
   /** Finns bara i redigeringsläge – tar bort referensen helt istället för att ändra den. */
   onRemove?: () => void
@@ -155,13 +177,14 @@ function TagQuickAdd({
         const existing = await db.materialTags
           .where('projectId')
           .equals(projectId)
-          .filter((t) => t.code.toLowerCase() === trimmed.toLowerCase())
+          .filter((t) => t.kind === kind && t.code.toLowerCase() === trimmed.toLowerCase())
           .first()
         if (existing) return existing.id
 
         const newTag: MaterialTag = {
           id: createId(),
           projectId,
+          kind,
           code: trimmed,
           description: '',
           colorIndex: 0,
@@ -183,7 +206,7 @@ function TagQuickAdd({
           {displayValue && <span className="material-color-dot" style={{ background: colorForValue(displayValue) }} />}
           <input
             value={displayValue}
-            placeholder="Sök eller skapa tagg, t.ex. Klinker 1"
+            placeholder={searchPlaceholder}
             autoFocus={!initial}
             onChange={(e) => {
               setSelectedTagId(null)

@@ -1,11 +1,13 @@
 import * as XLSX from 'xlsx'
-import { db, type Project } from '../../db'
+import { db, type InventoryRow, type MaterialTag, type Project } from '../../db'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Yta', 'Rivning', 'Material', 'Övrigt']
+const YTSKIKT_HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Yta', 'Rivning', 'Material', 'Övrigt']
+const UTRUSTNING_HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Namn', 'Utrustning', 'Övrigt']
 
 /**
- * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per ytskikt per rum,
- * sorterad per nivå (högst plan först) och rumsnummer. Laddas ner direkt i webbläsaren.
+ * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per ytskikt per rum i
+ * huvudfliken, en motsvarande flik för Utrustning, sorterat per nivå (högst plan först) och
+ * rumsnummer. Laddas ner direkt i webbläsaren.
  */
 export async function exportProjectToExcel(project: Project): Promise<void> {
   const [rooms, levels, tags] = await Promise.all([
@@ -32,9 +34,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     return a.roomNumber.localeCompare(b.roomNumber, 'sv', { numeric: true })
   })
 
-  const data: (string | number)[][] = [HEADER]
-
-  const formatMaterials = (row: { materials: { tagId: string; note: string }[] }) =>
+  const formatTags = (row: Pick<InventoryRow, 'materials'>) =>
     row.materials
       .map((m) => {
         // `?? 'Okänd tagg'` ensam missar en tagg som finns men har tom kod (t.ex. gammal
@@ -44,54 +44,87 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
       })
       .join('; ')
 
+  const ytskiktData: (string | number)[][] = [YTSKIKT_HEADER]
+  const utrustningData: (string | number)[][] = [UTRUSTNING_HEADER]
+
   for (const room of sortedRooms) {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
     const record = recordByRoomId.get(room.id)
-    const rows = record?.rows.filter(
+
+    const ytskiktRows = record?.rows.filter(
       (row) => row.surface.trim() || row.rivning.trim() || row.materials.length > 0 || row.ovrigt.trim(),
     )
-
-    if (!rows || rows.length === 0) {
-      data.push([levelName, room.roomNumber, room.roomName, '', '', '', ''])
-      continue
-    }
-
-    for (const row of rows) {
-      data.push([
+    if (!ytskiktRows || ytskiktRows.length === 0) {
+      ytskiktData.push([
         levelName,
         room.roomNumber,
         room.roomName,
-        row.surface,
-        row.rivning,
-        formatMaterials(row),
-        row.ovrigt,
+        record?.antalPersoner ?? '',
+        record?.funktionsbeskrivning ?? '',
+        '',
+        '',
+        '',
+        '',
       ])
+    } else {
+      for (const row of ytskiktRows) {
+        ytskiktData.push([
+          levelName,
+          room.roomNumber,
+          room.roomName,
+          record?.antalPersoner ?? '',
+          record?.funktionsbeskrivning ?? '',
+          row.surface,
+          row.rivning,
+          formatTags(row),
+          row.ovrigt,
+        ])
+      }
+    }
+
+    const equipmentRows = record?.equipmentRows.filter(
+      (row) => row.surface.trim() || row.materials.length > 0 || row.ovrigt.trim(),
+    )
+    for (const row of equipmentRows ?? []) {
+      utrustningData.push([levelName, room.roomNumber, room.roomName, row.surface, formatTags(row), row.ovrigt])
     }
   }
 
-  const worksheet = XLSX.utils.aoa_to_sheet(data)
-  worksheet['!cols'] = [
+  const workbook = XLSX.utils.book_new()
+
+  const ytskiktSheet = XLSX.utils.aoa_to_sheet(ytskiktData)
+  ytskiktSheet['!cols'] = [
     { wch: 10 },
     { wch: 10 },
     { wch: 20 },
+    { wch: 12 },
+    { wch: 30 },
     { wch: 12 },
     { wch: 40 },
     { wch: 40 },
     { wch: 40 },
   ]
+  XLSX.utils.book_append_sheet(workbook, ytskiktSheet, 'Ytskikt')
 
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventering')
+  if (utrustningData.length > 1) {
+    const utrustningSheet = XLSX.utils.aoa_to_sheet(utrustningData)
+    utrustningSheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 40 }, { wch: 40 }]
+    XLSX.utils.book_append_sheet(workbook, utrustningSheet, 'Utrustning')
+  }
 
-  if (tags.length > 0) {
+  const legendSheet = (kind: MaterialTag['kind'], sheetName: string) => {
+    const kindTags = tags.filter((t) => t.kind === kind)
+    if (kindTags.length === 0) return
     const legendData: (string | number)[][] = [
       ['Kod', 'Beskrivning'],
-      ...tags.sort((a, b) => a.code.localeCompare(b.code, 'sv')).map((t) => [t.code, t.description]),
+      ...kindTags.sort((a, b) => a.code.localeCompare(b.code, 'sv')).map((t) => [t.code, t.description]),
     ]
-    const legendSheet = XLSX.utils.aoa_to_sheet(legendData)
-    legendSheet['!cols'] = [{ wch: 16 }, { wch: 50 }]
-    XLSX.utils.book_append_sheet(workbook, legendSheet, 'Materialtaggar')
+    const sheet = XLSX.utils.aoa_to_sheet(legendData)
+    sheet['!cols'] = [{ wch: 16 }, { wch: 50 }]
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
   }
+  legendSheet('material', 'Materialtaggar')
+  legendSheet('equipment', 'Utrustningstaggar')
 
   const dateStamp = new Date().toISOString().slice(0, 10)
   const safeName = project.name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Rumsa'
