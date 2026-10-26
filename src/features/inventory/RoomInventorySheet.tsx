@@ -4,6 +4,7 @@ import { db, createId, type InventoryRow, type MaterialReference, type Room } fr
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { RowTextInput } from './RowTextInput'
+import { GroupedRows } from './GroupedRows'
 import { MaterialReferenceEditor } from '../tags/MaterialReferenceEditor'
 import { TagsOverviewPanel } from '../tags/TagsOverviewPanel'
 import { deleteRoomCascade } from '../data/cascadeDelete'
@@ -120,7 +121,7 @@ export function RoomInventorySheet({
   }
 
   const addRow = () => {
-    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [], ovrigt: '' }])
+    setRows((prev) => [...prev, { id: createId(), surface: '', rivning: '', materials: [], ovrigt: '', groupId: null }])
   }
 
   const removeRow = (rowId: string) => {
@@ -165,57 +166,62 @@ export function RoomInventorySheet({
           <p className="field-hint">Laddar…</p>
         ) : (
           <div className="inventory-rows">
-            {rows.map((row) => (
-              <div className="inventory-row" key={row.id}>
-                <div className="inventory-row-header">
-                  <input
-                    className="inventory-surface-name"
-                    value={row.surface}
-                    placeholder="Yta (t.ex. Golv)"
-                    aria-label="Yta"
-                    onChange={(e) => updateRow(row.id, { surface: e.target.value })}
-                    onKeyDown={blurOnEnterEscape}
-                  />
-                  <button
-                    className="inventory-remove-row tap-target"
-                    onClick={() => removeRow(row.id)}
-                    aria-label="Ta bort rad"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="field">
-                  <label htmlFor={`rivning-${row.id}`}>Rivning</label>
-                  <RowTextInput
-                    inputId={`rivning-${row.id}`}
-                    projectId={projectId}
-                    field="rivning"
-                    value={row.rivning}
-                    onChange={(value) => updateRow(row.id, { rivning: value })}
-                    placeholder="t.ex. Bef. golv rivs."
-                  />
-                </div>
-                <div className="field">
-                  <label>Material</label>
-                  <MaterialReferenceEditor
-                    projectId={projectId}
-                    references={row.materials}
-                    onChange={(materials) => setRowMaterials(row.id, materials)}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor={`ovrigt-${row.id}`}>Övrigt</label>
-                  <RowTextInput
-                    inputId={`ovrigt-${row.id}`}
-                    projectId={projectId}
-                    field="ovrigt"
-                    value={row.ovrigt}
-                    onChange={(value) => updateRow(row.id, { ovrigt: value })}
-                    placeholder="t.ex. Fuktskada i hörnet"
-                  />
-                </div>
-              </div>
-            ))}
+            <GroupedRows
+              projectId={projectId}
+              rows={rows}
+              onRowsChange={(next) => setRows(() => next)}
+              renderRow={(row) => (
+                <>
+                  <div className="inventory-row-header">
+                    <input
+                      className="inventory-surface-name"
+                      value={row.surface}
+                      placeholder="Yta (t.ex. Golv)"
+                      aria-label="Yta"
+                      onChange={(e) => updateRow(row.id, { surface: e.target.value })}
+                      onKeyDown={blurOnEnterEscape}
+                    />
+                    <button
+                      className="inventory-remove-row tap-target"
+                      onClick={() => removeRow(row.id)}
+                      aria-label="Ta bort rad"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="field">
+                    <label htmlFor={`rivning-${row.id}`}>Rivning</label>
+                    <RowTextInput
+                      inputId={`rivning-${row.id}`}
+                      projectId={projectId}
+                      field="rivning"
+                      value={row.rivning}
+                      onChange={(value) => updateRow(row.id, { rivning: value })}
+                      placeholder="t.ex. Bef. golv rivs."
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Material</label>
+                    <MaterialReferenceEditor
+                      projectId={projectId}
+                      references={row.materials}
+                      onChange={(materials) => setRowMaterials(row.id, materials)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor={`ovrigt-${row.id}`}>Övrigt</label>
+                    <RowTextInput
+                      inputId={`ovrigt-${row.id}`}
+                      projectId={projectId}
+                      field="ovrigt"
+                      value={row.ovrigt}
+                      onChange={(value) => updateRow(row.id, { ovrigt: value })}
+                      placeholder="t.ex. Fuktskada i hörnet"
+                    />
+                  </div>
+                </>
+              )}
+            />
             <button className="btn btn-secondary" onClick={addRow}>
               + Lägg till rad
             </button>

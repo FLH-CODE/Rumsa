@@ -66,6 +66,24 @@ export interface InventoryRow {
   materials: MaterialReference[]
   /** Fritextfält för övrigt som inte passar in i Rivning/Material, t.ex. anmärkningar om skicket. */
   ovrigt: string
+  /** Vilken RoomCardGroup raden hör till, eller null om den inte är grupperad än. Ordningen
+   * inom en grupp (och bland ogrupperade rader) styrs av radernas inbördes position i
+   * InventoryRecord.rows – ingen separat sorteringsnyckel behövs. */
+  groupId: string | null
+}
+
+/**
+ * En namngiven grupp att sortera rumskortets rader under (t.ex. "Golv", "Väggar"), för att kunna
+ * organisera ett rumskort som har många rader. Delas av hela projektet (inte per rum) – ordningen
+ * och om gruppen är ihopfälld är alltså samma oavsett vilket rum man öppnar, så att man kan
+ * fälla ihop det man inte jobbar med just nu utan att behöva göra om det för varje rum.
+ */
+export interface RoomCardGroup {
+  id: string
+  projectId: string
+  name: string
+  order: number
+  collapsed: boolean
 }
 
 export interface InventoryRecord {
@@ -105,6 +123,7 @@ class RumsaDB extends Dexie {
   inventoryRecords!: EntityTable<InventoryRecord, 'id'>
   inventoryTemplates!: EntityTable<InventoryTemplate, 'id'>
   materialTags!: EntityTable<MaterialTag, 'id'>
+  roomCardGroups!: EntityTable<RoomCardGroup, 'id'>
 
   constructor() {
     super('rumsa')
@@ -154,16 +173,45 @@ class RumsaDB extends Dexie {
         })
     })
 
-    // Normaliserar varje läst post så att `materials` alltid är en array och `ovrigt` alltid en
-    // sträng, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post med
-    // den gamla formen innan den själv laddade om efter en uppgradering. Utan detta kraschar
-    // varje ställe som gör `row.materials.some/.map/.filter` eller läser `row.ovrigt` på en
-    // sådan post.
+    // v4: rader går att organisera i namngivna grupper (t.ex. "Golv", "Väggar") som delas av
+    // hela projektet – se RoomCardGroup. Befintliga rader blir ogrupperade (groupId: null) tills
+    // man själv sorterar in dem.
+    this.version(4)
+      .stores({
+        roomCardGroups: 'id, projectId, order',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('inventoryRecords')
+          .toCollection()
+          .modify((record: InventoryRecord) => {
+            for (const row of record.rows ?? []) {
+              if (typeof row.groupId === 'undefined') {
+                row.groupId = null
+              }
+            }
+          })
+      })
+
+    // Normaliserar varje läst post så att `materials` alltid är en array, `ovrigt` alltid en
+    // sträng och `groupId` alltid finns (null eller en sträng), oavsett vad som faktiskt ligger
+    // lagrat – t.ex. en flik som hann skriva en post med den gamla formen innan den själv laddade
+    // om efter en uppgradering. Utan detta kraschar varje ställe som gör
+    // `row.materials.some/.map/.filter` eller läser `row.ovrigt`/`row.groupId` på en sådan post.
     this.inventoryRecords.hook('reading', (record: InventoryRecord) => {
-      if (record.rows?.some((row) => !Array.isArray(row.materials) || typeof row.ovrigt !== 'string')) {
+      if (
+        record.rows?.some(
+          (row) => !Array.isArray(row.materials) || typeof row.ovrigt !== 'string' || typeof row.groupId === 'undefined',
+        )
+      ) {
         return {
           ...record,
-          rows: record.rows.map((row) => ({ ...row, materials: row.materials ?? [], ovrigt: row.ovrigt ?? '' })),
+          rows: record.rows.map((row) => ({
+            ...row,
+            materials: row.materials ?? [],
+            ovrigt: row.ovrigt ?? '',
+            groupId: row.groupId ?? null,
+          })),
         }
       }
       return record

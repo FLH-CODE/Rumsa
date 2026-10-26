@@ -8,7 +8,16 @@ import { db } from '../../db'
 export async function deleteProjectCascade(projectId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialTags],
+    [
+      db.projects,
+      db.levels,
+      db.drawings,
+      db.drawingPages,
+      db.rooms,
+      db.inventoryRecords,
+      db.materialTags,
+      db.roomCardGroups,
+    ],
     async () => {
       const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
       await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).delete()
@@ -18,6 +27,7 @@ export async function deleteProjectCascade(projectId: string): Promise<void> {
         db.drawings.where('projectId').equals(projectId).delete(),
         db.levels.where('projectId').equals(projectId).delete(),
         db.materialTags.where('projectId').equals(projectId).delete(),
+        db.roomCardGroups.where('projectId').equals(projectId).delete(),
       ])
       await db.projects.delete(projectId)
     },
@@ -45,6 +55,23 @@ export async function deleteRoomCascade(roomId: string): Promise<void> {
   await db.transaction('rw', [db.rooms, db.inventoryRecords], async () => {
     await db.inventoryRecords.where('roomId').equals(roomId).delete()
     await db.rooms.delete(roomId)
+  })
+}
+
+/**
+ * Tar bort en rumskorts-grupp och lösgör (groupId: null) alla rader i alla rum i projektet som
+ * hörde till den – raderna och deras ifyllda data finns kvar, bara ogrupperade.
+ */
+export async function deleteRoomCardGroupCascade(projectId: string, groupId: string): Promise<void> {
+  await db.transaction('rw', [db.roomCardGroups, db.rooms, db.inventoryRecords], async () => {
+    const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
+    const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
+    for (const record of records) {
+      if (!record.rows.some((row) => row.groupId === groupId)) continue
+      const rows = record.rows.map((row) => (row.groupId === groupId ? { ...row, groupId: null } : row))
+      await db.inventoryRecords.update(record.id, { rows })
+    }
+    await db.roomCardGroups.delete(groupId)
   })
 }
 

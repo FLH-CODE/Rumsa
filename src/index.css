@@ -769,12 +769,129 @@ textarea:focus-visible {
 
 .inventory-row {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 4px;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
+}
+
+.inventory-row.dragging {
+  opacity: 0.5;
+}
+
+.inventory-row-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- Gruppering av rumskortets rader (dra & släpp, ihopfällbart) --- */
+
+.row-drag-handle {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  touch-action: none;
+  cursor: grab;
+  padding: 10px 2px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.grouped-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grouped-rows-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.row-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 8px;
+}
+
+.row-group {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row-group.dragging {
+  opacity: 0.5;
+}
+
+.row-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.row-group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.row-group-toggle span[role='button'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-group-toggle span[role='button']:hover,
+.row-group-toggle span[role='button']:active {
+  text-decoration: underline;
+}
+
+.row-group-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.row-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+.row-group-delete {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-group-delete:active {
+  background: var(--color-surface);
+  color: var(--color-danger);
+}
+
+.row-group-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  text-align: center;
 }
 
 .inventory-row-header {

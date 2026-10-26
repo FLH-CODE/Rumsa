@@ -92,6 +92,19 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function GripIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props} stroke="none" fill="currentColor">
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
+    </svg>
+  )
+}
+
 export function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

@@ -10,6 +10,7 @@ function emptyRows() {
     rivning: '',
     materials: [],
     ovrigt: '',
+    groupId: null,
   }))
 }
 
