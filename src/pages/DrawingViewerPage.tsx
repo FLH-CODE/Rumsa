@@ -7,6 +7,7 @@ import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
+import { getViewerPosition, setViewerPosition } from '../features/pdf/viewerPositionStore'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
@@ -40,6 +41,7 @@ export default function DrawingViewerPage() {
 
   const currentIndex = sortedPages.findIndex((p) => p.id === drawingPageId)
   const currentPage = currentIndex >= 0 ? sortedPages[currentIndex] : null
+  const viewerPosition = currentPage ? getViewerPosition(currentPage.id) : undefined
   const { doc, error: docError } = usePdfDocument(currentPage?.drawingId ?? null)
   const rooms = useLiveQuery(
     () => (currentPage ? db.rooms.where('drawingPageId').equals(currentPage.id).toArray() : []),
@@ -234,17 +236,27 @@ export default function DrawingViewerPage() {
               // man alltid kan zooma ut till hela sidan och zooma in utan att det pixelerar.
               minScale={0.3}
               maxScale={PDF_MAX_ZOOM}
-              centerOnInit
+              // Återställer senaste pan/zoom-läge för sidan om det finns sparat – annars centreras
+              // sidan om varje gång man t.ex. stänger ett rumskort och kommer tillbaka.
+              initialPositionX={viewerPosition?.positionX}
+              initialPositionY={viewerPosition?.positionY}
+              initialScale={viewerPosition?.scale}
+              centerOnInit={!viewerPosition}
               // Annars zoomar varje scrollrörelse (mus-hjul eller styrplatta) i stället för att panorera,
               // vilket kändes hoppigt/förvirrande. Nu panorerar vanlig scroll, och pinch/ctrl+scroll zoomar.
               wheel={{ wheelDisabled: true }}
               trackPadPanning={{ disabled: false }}
-              // Uppdaterar bara skalan (styr rumstaggarnas motskalning) när den faktiskt ändrats
-              // mer än flyttalsbrus – annars triggar ren panorering (ingen zoomändring) ändå en
-              // ny render per musrörelse, vilket kändes hackigt med mus på dator.
-              onTransform={(_, state) =>
+              // Uppdaterar skalan (styr rumstaggarnas motskalning) och sparar undan pan/zoom-läget
+              // per sida, men bara när det faktiskt ändrats mer än flyttalsbrus – annars triggar ren
+              // panorering (ingen zoomändring) ändå en ny render per musrörelse.
+              onTransform={(_, state) => {
                 setZoomScale((prev) => (Math.abs(prev - state.scale) > 0.001 ? state.scale : prev))
-              }
+                setViewerPosition(currentPage.id, {
+                  positionX: state.positionX,
+                  positionY: state.positionY,
+                  scale: state.scale,
+                })
+              }}
             >
               <TransformComponent>
                 <PdfPageCanvas
@@ -378,6 +390,7 @@ function LevelRenameSheet({
           <input
             id="level-rename"
             autoFocus
+            enterKeyHint="done"
             value={name}
             placeholder="t.ex. Plan 1"
             onChange={(e) => setName(e.target.value)}

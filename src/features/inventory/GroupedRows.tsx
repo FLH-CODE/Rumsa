@@ -302,22 +302,19 @@ function GroupSection({
         <button type="button" className="row-drag-handle" aria-label="Dra för att flytta gruppen" {...attributes} {...listeners}>
           <GripIcon width={18} height={18} />
         </button>
+        {/* Separata knappar istället för en nästlad button/span – annars var det alldeles för
+           lätt att råka trycka på gruppnamnet (och öppna redigera-namn) när man egentligen
+           siktade på pilen för att fälla ihop/ut gruppen, eller tvärtom. */}
         <button
           type="button"
-          className="row-group-toggle"
+          className="row-group-chevron-btn"
           onClick={() => void db.roomCardGroups.update(group.id, { collapsed: !group.collapsed })}
+          aria-label={group.collapsed ? `Visa gruppen ${group.name}` : `Fäll ihop gruppen ${group.name}`}
         >
           <ChevronRightIcon className={`row-group-chevron${group.collapsed ? '' : ' open'}`} width={16} height={16} />
-          <span
-            onClick={(e) => {
-              e.stopPropagation()
-              onRename()
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            {group.name}
-          </span>
+        </button>
+        <button type="button" className="row-group-toggle" onClick={onRename}>
+          <span className="row-group-name">{group.name}</span>
           {rowIds.length > 0 && <span className="field-hint">({rowIds.length})</span>}
         </button>
         {onDelete && (
@@ -399,6 +396,7 @@ function GroupNameSheet({
           <input
             id="group-name"
             autoFocus
+            enterKeyHint="done"
             value={name}
             placeholder="t.ex. Golv"
             onChange={(e) => setName(e.target.value)}

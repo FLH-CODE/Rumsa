@@ -96,6 +96,7 @@ function CreateProjectSheet({ onClose }: { onClose: () => void }) {
           <input
             id="project-name"
             autoFocus
+            enterKeyHint="done"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="t.ex. NCC Kontor Badhustomten"

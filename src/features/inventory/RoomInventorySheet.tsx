@@ -175,6 +175,7 @@ export function RoomInventorySheet({
               className="inventory-room-number"
               value={roomNumber}
               placeholder="Rumsnummer"
+              enterKeyHint="done"
               onChange={(e) => setRoomNumber(e.target.value)}
               onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnummer"
@@ -183,6 +184,7 @@ export function RoomInventorySheet({
               className="inventory-room-name"
               value={roomName}
               placeholder="Rumsnamn"
+              enterKeyHint="done"
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnamn"
@@ -222,6 +224,7 @@ export function RoomInventorySheet({
                     id="antal-personer"
                     value={loaded.antalPersoner}
                     placeholder="t.ex. 12"
+                    enterKeyHint="done"
                     onChange={(e) => setField('antalPersoner', () => e.target.value)}
                     onKeyDown={blurOnEnterEscape}
                   />
@@ -232,6 +235,7 @@ export function RoomInventorySheet({
                     id="funktionsbeskrivning"
                     value={loaded.funktionsbeskrivning}
                     placeholder="t.ex. Kommunikationsyta"
+                    enterKeyHint="done"
                     onChange={(e) => setField('funktionsbeskrivning', () => e.target.value)}
                     onKeyDown={blurOnEnterEscape}
                   />
@@ -255,6 +259,7 @@ export function RoomInventorySheet({
                           value={row.surface}
                           placeholder="Namn (t.ex. Möblering)"
                           aria-label="Namn"
+                          enterKeyHint="done"
                           onChange={(e) => utrustning.updateRow(row.id, { surface: e.target.value })}
                           onKeyDown={blurOnEnterEscape}
                         />
@@ -311,6 +316,7 @@ export function RoomInventorySheet({
                           value={row.surface}
                           placeholder="Yta (t.ex. Golv)"
                           aria-label="Yta"
+                          enterKeyHint="done"
                           onChange={(e) => ytskikt.updateRow(row.id, { surface: e.target.value })}
                           onKeyDown={blurOnEnterEscape}
                         />

@@ -206,6 +206,7 @@ function TagEditSheet({
           <input
             id="tag-code"
             autoFocus
+            enterKeyHint="done"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder={kind === 'material' ? 't.ex. Klinker 1' : 't.ex. Möblering'}
@@ -216,6 +217,7 @@ function TagEditSheet({
           <label htmlFor="tag-description">Beskrivning</label>
           <input
             id="tag-description"
+            enterKeyHint="done"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={kind === 'material' ? 't.ex. Klinkerplatta 600x600, ljusgrå' : 't.ex. Löst inredningspaket'}

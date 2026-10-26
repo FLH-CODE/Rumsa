@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, type MaterialReference, type MaterialTag } from '../../db'
 import { colorForValue } from './colorForValue'
@@ -142,6 +142,7 @@ function TagQuickAdd({
   onRemove?: () => void
   onCancel: () => void
 }) {
+  const inputRef = useRef<HTMLInputElement>(null)
   const initialTag = initial ? tags.find((t) => t.id === initial.tagId) : undefined
   const [query, setQuery] = useState(initialTag?.code ?? '')
   const [selectedTagId, setSelectedTagId] = useState<string | null>(initial?.tagId ?? null)
@@ -205,9 +206,11 @@ function TagQuickAdd({
         <div className="material-autocomplete-field">
           {displayValue && <span className="material-color-dot" style={{ background: colorForValue(displayValue) }} />}
           <input
+            ref={inputRef}
             value={displayValue}
             placeholder={searchPlaceholder}
             autoFocus={!initial}
+            enterKeyHint="done"
             onChange={(e) => {
               setSelectedTagId(null)
               setQuery(e.target.value)
@@ -228,6 +231,9 @@ function TagQuickAdd({
                     setSelectedTagId(t.id)
                     setQuery(t.code)
                     setOpen(false)
+                    // e.preventDefault() ovan håller annars kvar fokus (och mobilens tangentbord
+                    // uppe) i fältet trots att man gjort sitt val – stäng ner det explicit.
+                    inputRef.current?.blur()
                   }}
                 >
                   <span className="material-color-dot" style={{ background: colorForValue(t.code) }} />
@@ -243,6 +249,7 @@ function TagQuickAdd({
         className="tag-quick-add-note"
         placeholder="Notering (valfritt), t.ex. upp till 1200mm"
         autoFocus={Boolean(initial)}
+        enterKeyHint="done"
         value={note}
         onChange={(e) => setNote(e.target.value)}
         onKeyDown={confirmOnEnterEscape(() => void handleConfirm(), onCancel)}

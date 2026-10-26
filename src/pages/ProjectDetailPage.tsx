@@ -173,6 +173,7 @@ export default function ProjectDetailPage() {
           className="header-title-input"
           value={name ?? ''}
           aria-label="Projektnamn"
+          enterKeyHint="done"
           onChange={(e) => {
             setNameTouched(true)
             setName(e.target.value)

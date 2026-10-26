@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
@@ -48,6 +48,7 @@ export function RowTextInput({
 }) {
   const suggestions = useFieldSuggestions(projectId, field)
   const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase()
@@ -59,9 +60,11 @@ export function RowTextInput({
     <div className="material-autocomplete">
       <div className="material-autocomplete-field">
         <input
+          ref={inputRef}
           id={inputId}
           value={value}
           placeholder={placeholder}
+          enterKeyHint="done"
           onChange={(e) => {
             onChange(e.target.value)
             setOpen(true)
@@ -81,6 +84,7 @@ export function RowTextInput({
                   e.preventDefault()
                   onChange(s)
                   setOpen(false)
+                  inputRef.current?.blur()
                 }}
               >
                 {s}

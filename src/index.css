@@ -462,13 +462,13 @@ textarea:focus-visible {
    överlappade varandra. */
 .viewer-level-pill {
   position: absolute;
-  top: calc(10px + 44px + 8px + var(--safe-top));
+  top: calc(10px + 44px + 3px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   max-width: min(80vw, 320px);
   background: rgba(0, 0, 0, 0.55);
   border-radius: 999px;
-  padding: 5px 16px;
+  padding: 3px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -483,7 +483,7 @@ textarea:focus-visible {
 .viewer-level-name {
   color: #fff;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   text-align: center;
   max-width: 100%;
   overflow: hidden;
@@ -519,7 +519,7 @@ textarea:focus-visible {
 }
 
 .viewer-page-count {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   opacity: 0.8;
   max-width: 100%;
   overflow: hidden;
@@ -908,26 +908,43 @@ textarea:focus-visible {
   gap: 4px;
 }
 
+/* Egen knapp för pilen, med gott om tryckyta och ett tydligt eget utrymme – separerad från
+   namnet (som byter namn på gruppen) så de två aldrig konkurrerar om samma tryck. */
+.row-group-chevron-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.row-group-chevron-btn:active {
+  background: var(--color-surface);
+}
+
 .row-group-toggle {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 4px;
+  padding: 8px 6px;
+  margin-left: 2px;
   font-weight: 600;
   text-align: left;
 }
 
-.row-group-toggle span[role='button'] {
+.row-group-toggle:hover .row-group-name,
+.row-group-toggle:active .row-group-name {
+  text-decoration: underline;
+}
+
+.row-group-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.row-group-toggle span[role='button']:hover,
-.row-group-toggle span[role='button']:active {
-  text-decoration: underline;
 }
 
 .row-group-chevron {
