@@ -1,16 +1,21 @@
-import { db, createId, type InventoryRecord, type Room } from '../../db'
+import { db, createId, type InventoryRecord, type InventoryRow, type Room, type RoomCategory } from '../../db'
 
-/** Standardrader för ett nytt rum – matchar de vanligaste ytskikten (golv/sockel/vägg/tak). */
-export const DEFAULT_SURFACES = ['Golv', 'Sockel', 'Vägg', 'Tak']
+/** Standardrader för ett nytt rum – en tom rad per vanlig ytskiktskategori, så man slipper lägga
+ * till dem själv för varje nytt rum. Utrustning/Övrigt börjar tomma – de läggs till vid behov. */
+const DEFAULT_ITEM_CATEGORIES: { category: RoomCategory; surface: string }[] = [
+  { category: 'golv', surface: 'Golv' },
+  { category: 'vagg', surface: 'Vägg' },
+  { category: 'tak', surface: 'Tak' },
+]
 
-function emptyRows() {
-  return DEFAULT_SURFACES.map((surface) => ({
+function defaultItems(): InventoryRow[] {
+  return DEFAULT_ITEM_CATEGORIES.map(({ category, surface }) => ({
     id: createId(),
+    category,
     surface,
     rivning: '',
     materials: [],
     ovrigt: '',
-    groupId: null,
   }))
 }
 
@@ -27,8 +32,7 @@ export async function ensureInventoryRecord(room: Room): Promise<InventoryRecord
     const record: InventoryRecord = {
       id: createId(),
       roomId: room.id,
-      rows: emptyRows(),
-      equipmentRows: [],
+      items: defaultItems(),
       antalPersoner: '',
       funktionsbeskrivning: '',
       updatedAt: Date.now(),

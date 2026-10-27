@@ -7,9 +7,16 @@ import { importDrawingFile } from '../features/pdf/importDrawing'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
-import { isRecordStarted } from '../features/inventory/recordStatus'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
-import { DrawingIcon, ExportIcon, SettingsIcon, TagIcon, TrashIcon, ChevronRightIcon } from '../components/icons'
+import {
+  FloorPlanIcon,
+  DrawingIcon,
+  ExportIcon,
+  SettingsIcon,
+  TagIcon,
+  TrashIcon,
+  ChevronRightIcon,
+} from '../components/icons'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -42,14 +49,6 @@ export default function ProjectDetailPage() {
     [projectId],
   )
   const rooms = useLiveQuery(() => db.rooms.where('projectId').equals(projectId ?? '').toArray(), [projectId])
-  const roomIdsKey = (rooms ?? []).map((r) => r.id).join(',')
-  const records = useLiveQuery(
-    () => db.inventoryRecords.where('roomId').anyOf(roomIdsKey ? roomIdsKey.split(',') : []).toArray(),
-    [roomIdsKey],
-  )
-  const completedCount = (records ?? []).filter((r) =>
-    isRecordStarted(r),
-  ).length
   const tagCount = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId ?? '').count(),
     [projectId],
@@ -159,7 +158,6 @@ export default function ProjectDetailPage() {
   }
 
   const roomCount = rooms?.length ?? 0
-  const progressPct = roomCount > 0 ? Math.round((completedCount / roomCount) * 100) : 0
   const currentPatternLabel =
     ROOM_NUMBER_PRESETS.find((p) => p.value === project.roomNumberPattern)?.shortLabel ?? 'Anpassat'
 
@@ -191,24 +189,11 @@ export default function ProjectDetailPage() {
           }
         >
           <div className="primary-action-icon">
-            <DrawingIcon width={26} height={26} />
+            <FloorPlanIcon width={28} height={28} />
           </div>
           <div className="primary-action-text">
             <strong>{firstPage ? 'Öppna ritningsvisare' : 'Ladda upp en ritning för att börja'}</strong>
-            {roomCount > 0 ? (
-              <div className="progress-row">
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                </div>
-                <span className="field-hint">
-                  {completedCount}/{roomCount} rum klara
-                </span>
-              </div>
-            ) : (
-              <span className="field-hint">
-                {firstPage ? 'Rumstaggar tolkas automatiskt ur ritningen' : 'PDF-ritning med rumstaggar'}
-              </span>
-            )}
+            {!firstPage && <span className="field-hint">PDF-ritning med rumstaggar</span>}
           </div>
           <ChevronRightIcon className="primary-action-chevron" />
         </button>

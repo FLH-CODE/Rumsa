@@ -265,6 +265,7 @@ textarea:focus-visible {
   inset: 0;
   z-index: 150;
   background: var(--color-bg);
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -729,7 +730,7 @@ textarea:focus-visible {
    en skärm som ändå har gott om plats att ge. */
 @media (min-width: 900px) {
   .inventory-sheet {
-    max-width: 860px;
+    max-width: 1040px;
   }
 }
 
@@ -745,28 +746,6 @@ textarea:focus-visible {
   padding: 20px 16px 12px;
   background: var(--color-surface);
   z-index: 2;
-}
-
-.room-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: 4px;
-}
-
-.room-tab {
-  flex: 1;
-  padding: 10px 4px;
-  min-height: 44px;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  border-bottom: 2px solid transparent;
-}
-
-.room-tab.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
 }
 
 .inventory-sheet-title {
@@ -812,64 +791,168 @@ textarea:focus-visible {
 
 .inventory-row {
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: column;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
+  transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
-.inventory-row.dragging {
-  opacity: 0.5;
+/* --- Rumskortets ikonbaserade arbetsläge (kategorirad, rader, taggpalett, dra & släpp) ---
+   Den gråskaliga "bläck"-tonen här (svart/vitt/neutrala gråtoner, ingen färg) och det markerade
+   läget (mörk/svart yta istället för appens vanliga primärfärg) är medvetet lånat från
+   Återbruksmatcharens ikonral/arbetsläges-docka, för en liknande, ren verktygskänsla. */
+.room-workspace {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
+     osynligt istället för att bara krävas lite horisontell scroll för att nå. */
+  overflow-x: auto;
 }
 
-.inventory-row-content {
+.category-column,
+.category-items,
+.inventory-row {
+  min-width: 0;
+}
+
+.category-rail {
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  padding: 6px;
+}
+
+.category-rail-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3f3f46;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.category-rail-btn:hover {
+  background: #ececea;
+}
+
+.category-rail-btn.active {
+  background: #18181b;
+  color: #ffffff;
+}
+
+.category-column {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* --- Gruppering av rumskortets rader (dra & släpp, ihopfällbart) --- */
-
-.row-drag-handle {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  touch-action: none;
-  cursor: grab;
-  padding: 10px 2px;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-
-.grouped-rows {
+.category-items {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.grouped-rows-toolbar {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.row-bucket {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 8px;
+  gap: 12px;
+  min-height: 60px;
   border-radius: var(--radius-md);
   transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
-/* Visar tydligt VILKEN grupp en dragen rad skulle hamna i om man släppte nu – annars var det
-   otydligt om man faktiskt var "över" rätt grupp under tiden man drog. */
-.row-bucket.drop-target {
+.category-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+}
+
+/* Visar tydligt att en rad (eller kategorins tomma yta) är "över" vid en dragning – annars var
+   det otydligt om man faktiskt skulle träffa raden om man släppte nu. */
+.drop-target {
   background: rgba(22, 78, 99, 0.08);
   box-shadow: 0 0 0 2px var(--color-primary) inset;
+}
+
+.tag-palette {
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.tag-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.palette-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: grab;
+  touch-action: none;
+}
+
+.palette-tag:active {
+  cursor: grabbing;
+}
+
+.palette-tag.dragging {
+  opacity: 0.4;
+}
+
+.palette-tag-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.palette-tag-text strong {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* På smalare skärmar (telefon) krymper ralj/palett något så den smala mittenkolumnen ändå får
+   rimligt med plats – samma 3-kolumners arbetsläge som på dator, bara mer kompakt. */
+@media (max-width: 640px) {
+  .category-rail-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tag-palette {
+    width: 128px;
+  }
 }
 
 .row-group-add-row {
@@ -882,102 +965,11 @@ textarea:focus-visible {
 }
 
 /* Elementet som följer pekaren under en dragning (DragOverlay) – lite lyft/skuggat så det känns
-   som att man faktiskt plockat upp raden/gruppen, inte bara flyttat text. */
+   som att man faktiskt plockat upp taggen, inte bara flyttat text. */
 .drag-preview {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
   opacity: 0.95;
   cursor: grabbing;
-}
-
-.row-group {
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.row-group.dragging {
-  opacity: 0.5;
-}
-
-.row-group-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Egen knapp för pilen, med gott om tryckyta och ett tydligt eget utrymme – separerad från
-   namnet (som byter namn på gruppen) så de två aldrig konkurrerar om samma tryck. */
-.row-group-chevron-btn {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-}
-
-.row-group-chevron-btn:active {
-  background: var(--color-surface);
-}
-
-.row-group-toggle {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 6px;
-  margin-left: 2px;
-  font-weight: 600;
-  text-align: left;
-}
-
-.row-group-toggle:hover .row-group-name,
-.row-group-toggle:active .row-group-name {
-  text-decoration: underline;
-}
-
-.row-group-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.row-group-chevron {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: transform 0.15s ease;
-}
-
-.row-group-chevron.open {
-  transform: rotate(90deg);
-}
-
-.row-group-delete {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.row-group-delete:active {
-  background: var(--color-surface);
-  color: var(--color-danger);
-}
-
-.row-group-empty {
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  text-align: center;
 }
 
 .inventory-row-header {
@@ -988,6 +980,9 @@ textarea:focus-visible {
 
 .inventory-surface-name {
   flex: 1;
+  /* Annars tvingar inputens implicita min-width:auto hela raden (och syskonen i
+     .room-workspace, t.ex. taggpaletten) bredare än tillgängligt utrymme på en smal skärm. */
+  min-width: 0;
   border: none;
   background: transparent;
   font-weight: 600;
@@ -1038,6 +1033,7 @@ textarea:focus-visible {
 
 .material-autocomplete-field input {
   flex: 1;
+  min-width: 0;
   border: none;
   padding: 10px 2px;
   min-height: 44px;
@@ -1440,27 +1436,6 @@ textarea:focus-visible {
 .primary-action-chevron {
   flex-shrink: 0;
   opacity: 0.8;
-}
-
-.progress-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.progress-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.25);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #6fcf97;
-  border-radius: 3px;
-  transition: width 0.3s ease;
 }
 
 /* --- Inställningslista (grupperad, app-liknande) --- */

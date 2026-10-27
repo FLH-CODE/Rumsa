@@ -1,23 +1,19 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, createId, type MaterialTag, type Room } from '../../db'
+import { db, createId, ROOM_CATEGORIES, type MaterialTag, type Room, type RoomCategory } from '../../db'
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { colorForValue } from './colorForValue'
 import { tagLabel } from './tagLabel'
 import { CloseIcon } from '../../components/icons'
+import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 
-const SECTION_TITLE: Record<MaterialTag['kind'], string> = {
-  material: 'Material (Ytskikt)',
-  equipment: 'Utrustning',
-}
-
 /**
- * Översikt över projektets tagg-bibliotek – material (Ytskikt) och utrustning (Utrustning) är
- * skilda pooler men visas i samma översikt, så man slipper leta efter rätt ställe att hantera
- * dem på. Renderas som en fristående, fullskärms-overlay (fixed position) istället för en vanlig
- * sida så att den går att nå och stänga igen utan att tappa det man höll på med underliggande –
- * t.ex. zoom/pan-läget i ritningsvisaren eller ett öppet, osparat rumskort.
+ * Översikt över projektets tagg-bibliotek – en sektion per fast kategori (Golv, Vägg, Tak,
+ * Övrigt, Utrustning), eftersom en tagg bara går att använda inom sin egen kategori. Renderas som
+ * en fristående, fullskärms-overlay (fixed position) istället för en vanlig sida så att den går
+ * att nå och stänga igen utan att tappa det man höll på med underliggande – t.ex. zoom/pan-läget
+ * i ritningsvisaren eller ett öppet, osparat rumskort.
  */
 export function TagsOverviewPanel({
   projectId,
@@ -32,7 +28,7 @@ export function TagsOverviewPanel({
 }) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).sortBy('code'), [projectId])
   const [editingTag, setEditingTag] = useState<MaterialTag | null>(null)
-  const [creatingKind, setCreatingKind] = useState<MaterialTag['kind'] | null>(null)
+  const [creatingCategory, setCreatingCategory] = useState<RoomCategory | null>(null)
 
   // Hur många rum som refererar varje tagg – så man ser omfattningen direkt i listan, inte bara
   // efter att ha öppnat en enskild tagg.
@@ -41,9 +37,7 @@ export function TagsOverviewPanel({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
-      const tagIds = new Set(
-        [...record.rows, ...record.equipmentRows].flatMap((row) => row.materials.map((m) => m.tagId)),
-      )
+      const tagIds = new Set(record.items.flatMap((item) => item.materials.map((m) => m.tagId)))
       for (const tagId of tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1)
     }
     return counts
@@ -62,16 +56,16 @@ export function TagsOverviewPanel({
         <span className="tap-target" aria-hidden="true" />
       </header>
       <main className="app-main">
-        {(['material', 'equipment'] as const).map((kind) => {
-          const kindTags = tags?.filter((t) => t.kind === kind)
+        {ROOM_CATEGORIES.map((category) => {
+          const categoryTags = tags?.filter((t) => t.category === category)
           return (
-            <section key={kind} className="tag-section">
-              <h2 className="section-heading-text">{SECTION_TITLE[kind]}</h2>
-              {kindTags === undefined ? null : kindTags.length === 0 ? (
+            <section key={category} className="tag-section">
+              <h2 className="section-heading-text">{CATEGORY_LABEL[category]}</h2>
+              {categoryTags === undefined ? null : categoryTags.length === 0 ? (
                 <p className="field-hint">Inga taggar ännu.</p>
               ) : (
                 <div className="card-list">
-                  {kindTags.map((tag) => {
+                  {categoryTags.map((tag) => {
                     const roomCount = roomCountByTag?.get(tag.id) ?? 0
                     return (
                       <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
@@ -86,21 +80,21 @@ export function TagsOverviewPanel({
                   })}
                 </div>
               )}
-              <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={() => setCreatingKind(kind)}>
+              <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={() => setCreatingCategory(category)}>
                 + Lägg till tagg
               </button>
             </section>
           )
         })}
       </main>
-      {(editingTag || creatingKind) && (
+      {(editingTag || creatingCategory) && (
         <TagEditSheet
           projectId={projectId}
-          kind={editingTag?.kind ?? creatingKind!}
+          category={editingTag?.category ?? creatingCategory!}
           tag={editingTag}
           onClose={() => {
             setEditingTag(null)
-            setCreatingKind(null)
+            setCreatingCategory(null)
           }}
           onOpenRoom={onOpenRoom}
         />
@@ -111,13 +105,13 @@ export function TagsOverviewPanel({
 
 function TagEditSheet({
   projectId,
-  kind,
+  category,
   tag,
   onClose,
   onOpenRoom,
 }: {
   projectId: string
-  kind: MaterialTag['kind']
+  category: RoomCategory
   tag: MaterialTag | null
   onClose: () => void
   onOpenRoom?: (room: Room) => void
@@ -136,7 +130,7 @@ function TagEditSheet({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const matchingRoomIds = new Set(
       records
-        .filter((record) => [...record.rows, ...record.equipmentRows].some((row) => row.materials.some((m) => m.tagId === tag.id)))
+        .filter((record) => record.items.some((item) => item.materials.some((m) => m.tagId === tag.id)))
         .map((record) => record.roomId),
     )
     return [...matchingRoomIds]
@@ -157,7 +151,7 @@ function TagEditSheet({
         const collision = await db.materialTags
           .where('projectId')
           .equals(projectId)
-          .filter((t) => t.id !== tag?.id && t.kind === kind && t.code.toLowerCase() === trimmedCode.toLowerCase())
+          .filter((t) => t.id !== tag?.id && t.category === category && t.code.toLowerCase() === trimmedCode.toLowerCase())
           .first()
         if (collision) {
           throw new Error(`Taggen "${collision.code}" finns redan.`)
@@ -168,7 +162,7 @@ function TagEditSheet({
           await db.materialTags.add({
             id: createId(),
             projectId,
-            kind,
+            category,
             code: trimmedCode,
             description: description.trim(),
             colorIndex: 0,
@@ -198,9 +192,7 @@ function TagEditSheet({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ margin: 0 }}>
-          {tag ? 'Redigera tagg' : kind === 'material' ? 'Ny materialtagg' : 'Ny utrustningstagg'}
-        </h2>
+        <h2 style={{ margin: 0 }}>{tag ? 'Redigera tagg' : `Ny ${CATEGORY_LABEL[category].toLowerCase()}tagg`}</h2>
         <div className="field">
           <label htmlFor="tag-code">Kod</label>
           <input
@@ -209,7 +201,7 @@ function TagEditSheet({
             enterKeyHint="done"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder={kind === 'material' ? 't.ex. Klinker 1' : 't.ex. Möblering'}
+            placeholder="t.ex. Klinker 1"
             onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
           />
         </div>
@@ -220,7 +212,7 @@ function TagEditSheet({
             enterKeyHint="done"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder={kind === 'material' ? 't.ex. Klinkerplatta 600x600, ljusgrå' : 't.ex. Löst inredningspaket'}
+            placeholder="t.ex. Klinkerplatta 600x600, ljusgrå"
             onKeyDown={confirmOnEnterEscape(() => void handleSave(), onClose)}
           />
         </div>

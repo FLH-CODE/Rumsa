@@ -32,6 +32,72 @@ export function DrawingIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function FloorPlanIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="1" />
+      <path d="M3 13h6v7" />
+      <path d="M13 4v6h8" />
+      <path d="M9 13a3 3 0 0 0 3-3" />
+    </svg>
+  )
+}
+
+export function FloorIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="1" />
+      <path d="M3 12h18M12 3v18" />
+    </svg>
+  )
+}
+
+export function WallIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="1" />
+      <path d="M4 9.3h16M4 14.7h16M12 4v5.3M8 9.3v5.4M16 9.3v5.4M12 14.7V20" />
+    </svg>
+  )
+}
+
+export function CeilingIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="1" />
+      <circle cx="12" cy="9" r="2" />
+      <path d="M12 11v5" />
+    </svg>
+  )
+}
+
+export function OtherIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9" />
+    </svg>
+  )
+}
+
+export function FurnitureIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 12V5.5A1.5 1.5 0 0 1 7.5 4h9A1.5 1.5 0 0 1 18 5.5V12" />
+      <path d="M4.5 12h15a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z" />
+      <path d="M6 17v3M18 17v3" />
+    </svg>
+  )
+}
+
+export function PersonIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="7" r="3.2" />
+      <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+    </svg>
+  )
+}
+
 export function TagIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

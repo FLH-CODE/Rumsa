@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, createId, type MaterialReference, type MaterialTag } from '../../db'
+import { db, createId, type MaterialReference, type MaterialTag, type RoomCategory } from '../../db'
 import { colorForValue } from './colorForValue'
 import { tagLabel } from './tagLabel'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
@@ -14,13 +14,14 @@ type FormState = { mode: 'add' } | { mode: 'edit'; ref: MaterialReference }
 /**
  * Listar materialreferenser på en rad (t.ex. två olika klinkertyper på samma vägg, var och en
  * med en notering som "upp till 1200mm") och låter en lägga till fler – antingen genom att
- * återanvända en befintlig tagg ur projektets taggbibliotek eller skapa en ny i farten. En
- * befintlig referens går att trycka på för att ändra tagg/notering i efterhand (t.ex. om man
- * missade att skriva en notering första gången).
+ * återanvända en befintlig tagg ur projektets taggbibliotek eller skapa en ny i farten (eller
+ * genom att dra en tagg hit från kategorins taggpalett, se RoomCategoryWorkspace). En befintlig
+ * referens går att trycka på för att ändra tagg/notering i efterhand, eller ta bort (med
+ * kontrollfråga, eftersom det inte går att ångra).
  */
 export function MaterialReferenceEditor({
   projectId,
-  kind,
+  category,
   references,
   onChange,
   addLabel = '+ Lägg till material',
@@ -28,9 +29,9 @@ export function MaterialReferenceEditor({
   removeLabel = 'Ta bort material',
 }: {
   projectId: string
-  /** Vilken taggpool referenserna väljs ur – Ytskikt ('material') och Utrustning ('equipment')
-   * har varsin, så en städrutin inte dyker upp bland klinkertyper eller tvärtom. */
-  kind: MaterialTag['kind']
+  /** Vilken kategoris taggpool referenserna väljs ur – en tagg hör bara till en kategori, så en
+   * golvtagg aldrig kan dyka upp som förslag på en vägg eller tvärtom. */
+  category: RoomCategory
   references: MaterialReference[]
   onChange: (refs: MaterialReference[]) => void
   addLabel?: string
@@ -39,8 +40,8 @@ export function MaterialReferenceEditor({
 }) {
   const tags =
     useLiveQuery(
-      () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.kind === kind).toArray(),
-      [projectId, kind],
+      () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).toArray(),
+      [projectId, category],
     ) ?? []
   const tagById = new Map(tags.map((t) => [t.id, t]))
   const [formState, setFormState] = useState<FormState | null>(null)
@@ -56,6 +57,9 @@ export function MaterialReferenceEditor({
   }
 
   const removeReference = (refId: string) => {
+    const ref = references.find((r) => r.id === refId)
+    const label = ref ? tagLabel(tagById.get(ref.tagId)) : 'materialet'
+    if (!confirm(`Ta bort ${label} från raden?`)) return
     onChange(references.filter((r) => r.id !== refId))
     setFormState(null)
   }
@@ -68,7 +72,7 @@ export function MaterialReferenceEditor({
             <TagQuickAdd
               key={ref.id}
               projectId={projectId}
-              kind={kind}
+              category={category}
               tags={tags}
               searchPlaceholder={searchPlaceholder}
               initial={{ tagId: ref.tagId, note: ref.note }}
@@ -106,7 +110,7 @@ export function MaterialReferenceEditor({
       {formState?.mode === 'add' ? (
         <TagQuickAdd
           projectId={projectId}
-          kind={kind}
+          category={category}
           tags={tags}
           searchPlaceholder={searchPlaceholder}
           onConfirm={addReference}
@@ -123,7 +127,7 @@ export function MaterialReferenceEditor({
 
 function TagQuickAdd({
   projectId,
-  kind,
+  category,
   tags,
   initial,
   searchPlaceholder,
@@ -132,7 +136,7 @@ function TagQuickAdd({
   onCancel,
 }: {
   projectId: string
-  kind: MaterialTag['kind']
+  category: RoomCategory
   tags: MaterialTag[]
   /** Förifyller formuläret med en befintlig referens, för redigering istället för tillägg. */
   initial?: { tagId: string; note: string }
@@ -178,14 +182,14 @@ function TagQuickAdd({
         const existing = await db.materialTags
           .where('projectId')
           .equals(projectId)
-          .filter((t) => t.kind === kind && t.code.toLowerCase() === trimmed.toLowerCase())
+          .filter((t) => t.category === category && t.code.toLowerCase() === trimmed.toLowerCase())
           .first()
         if (existing) return existing.id
 
         const newTag: MaterialTag = {
           id: createId(),
           projectId,
-          kind,
+          category,
           code: trimmed,
           description: '',
           colorIndex: 0,

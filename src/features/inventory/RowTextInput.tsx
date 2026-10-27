@@ -15,8 +15,8 @@ function useFieldSuggestions(projectId: string, field: FreeTextField): string[] 
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
-      for (const row of record.rows) {
-        const text = row[field].trim()
+      for (const item of record.items) {
+        const text = item[field].trim()
         if (!text) continue
         counts.set(text, (counts.get(text) ?? 0) + 1)
       }

@@ -71,7 +71,7 @@ export default function DrawingViewerPage() {
     if (!filterTagId) return null
     const set = new Set<string>()
     for (const record of records ?? []) {
-      if (record.rows.some((row) => row.materials.some((m) => m.tagId === filterTagId))) {
+      if (record.items.some((item) => item.materials.some((m) => m.tagId === filterTagId))) {
         set.add(record.roomId)
       }
     }
