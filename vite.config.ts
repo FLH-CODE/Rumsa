@@ -21,7 +21,12 @@ export default defineConfig(({ command }) => ({
         description: 'Inventering av rum på plats – ritningar, rumstaggar och ytskikt.',
         theme_color: '#164e63',
         background_color: '#164e63',
-        display: 'standalone',
+        // Helskärm (döljer även OS-statusraden, inte bara webbläsarens adressfält) när appen är
+        // tillagd på hemskärmen – display_override ger standalone som reserv på plattformar som
+        // inte stödjer fullscreen. Gäller bara den installerade genvägen; en vanlig öppen
+        // webbläsarflik kan aldrig dölja webbläsarens egen adressrad/flikrad.
+        display: 'fullscreen',
+        display_override: ['fullscreen', 'standalone'],
         orientation: 'any',
         start_url: '.',
         scope: '.',

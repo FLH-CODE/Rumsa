@@ -40,16 +40,18 @@ export function RoomPerspectiveNav({
   return (
     <svg viewBox="0 0 140 170" className="room-perspective-nav">
       <title>Välj yta</title>
+      {/* Öppet hörn (golv/vänstervägg/bakvägg/tak) istället för alla fyra väggar – vänstra
+         väggen och bakväggen räcker för att läsas som "ett rumshörn", och en högervägg gjorde
+         bara illustrationen rörigare utan att tillföra något. */}
       <g {...faceGroupProps('tak')}>
-        <polygon points="8,8 132,8 95,55 45,55" fill={fill('tak')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+        <polygon points="8,8 132,8 132,55 45,55" fill={fill('tak')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
       </g>
       <g {...faceGroupProps('vagg')}>
         <polygon points="8,8 45,55 45,115 8,162" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
-        <polygon points="132,8 95,55 95,115 132,162" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
-        <polygon points="45,55 95,55 95,115 45,115" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+        <polygon points="45,55 132,55 132,115 45,115" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
       </g>
       <g {...faceGroupProps('golv')}>
-        <polygon points="8,162 132,162 95,115 45,115" fill={fill('golv')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+        <polygon points="8,162 132,162 132,115 45,115" fill={fill('golv')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
       </g>
     </svg>
   )

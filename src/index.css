@@ -797,6 +797,20 @@ textarea:focus-visible {
    verktygskänsla. */
 .room-workspace {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Arbetslägesraden (ikonrad + rumsperspektiv) ligger överst, över hela kortets bredd – inte som
+   en hög vänsterkolumn – så den aldrig tvingar fram horisontell scroll på en smal telefon. */
+.room-nav-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.room-workspace-body {
+  display: flex;
   align-items: flex-start;
   gap: 16px;
   /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
@@ -804,22 +818,10 @@ textarea:focus-visible {
   overflow-x: auto;
 }
 
-.category-column {
-  min-width: 0;
-}
-
-.room-nav-column {
-  position: sticky;
-  top: 0;
+.category-rail {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.category-rail {
-  display: flex;
-  flex-direction: row;
   gap: 4px;
   background: #ffffff;
   border: 1px solid #e4e4e7;
@@ -847,8 +849,14 @@ textarea:focus-visible {
   color: #ffffff;
 }
 
+.room-workspace-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .category-column {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -949,6 +957,23 @@ textarea:focus-visible {
   gap: 2px;
   max-height: 60vh;
   overflow-y: auto;
+}
+
+/* "+ Skapa ny tagg"-formuläret är byggt för bredare sammanhang (två knappar sida vid sida) – i
+   den smala paletten fick det annars knapparna (och ibland fälten) att svämma över kortets
+   högerkant. Stack:ar om till en smal, fullbredd variant istället. */
+.tag-palette .tag-quick-add {
+  padding: 8px;
+}
+
+.tag-palette .tag-quick-add-actions {
+  flex-direction: column;
+}
+
+.tag-palette .tag-quick-add-actions .btn {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
 }
 
 .palette-tag {

@@ -263,51 +263,56 @@ export function RoomInventorySheet({
             }}
           >
             <div className="room-workspace">
-              <div className="room-nav-column">
+              <div className="room-nav-row">
                 <CategoryRail active={activeTab} onSelect={setActiveTab} />
                 <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={setActiveTab} />
               </div>
 
-              <div className="room-workspace-main">
-                {activeTab === 'funktion' ? (
-                  <div className="inventory-rows">
-                    <div className="field">
-                      <label htmlFor="antal-personer">Antal personer</label>
-                      <input
-                        id="antal-personer"
-                        value={loaded.antalPersoner}
-                        placeholder="t.ex. 12"
-                        enterKeyHint="done"
-                        onChange={(e) => setField('antalPersoner', () => e.target.value)}
-                        onKeyDown={blurOnEnterEscape}
-                      />
+              <div className="room-workspace-body">
+                <div className="room-workspace-main">
+                  {activeTab === 'funktion' ? (
+                    <div className="inventory-rows">
+                      <div className="field">
+                        <label htmlFor="antal-personer">Antal personer</label>
+                        <input
+                          id="antal-personer"
+                          value={loaded.antalPersoner}
+                          placeholder="t.ex. 12"
+                          enterKeyHint="done"
+                          onChange={(e) => setField('antalPersoner', () => e.target.value)}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="funktionsbeskrivning">Funktionsbeskrivning</label>
+                        <input
+                          id="funktionsbeskrivning"
+                          value={loaded.funktionsbeskrivning}
+                          placeholder="t.ex. Kommunikationsyta"
+                          enterKeyHint="done"
+                          onChange={(e) => setField('funktionsbeskrivning', () => e.target.value)}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                      </div>
                     </div>
-                    <div className="field">
-                      <label htmlFor="funktionsbeskrivning">Funktionsbeskrivning</label>
-                      <input
-                        id="funktionsbeskrivning"
-                        value={loaded.funktionsbeskrivning}
-                        placeholder="t.ex. Kommunikationsyta"
-                        enterKeyHint="done"
-                        onChange={(e) => setField('funktionsbeskrivning', () => e.target.value)}
-                        onKeyDown={blurOnEnterEscape}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <CategoryContent
-                    category={activeTab}
-                    entry={loaded.categories[activeTab]}
-                    projectId={projectId}
-                    dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
-                    onRemoveMaterial={(ref, tag) => removeMaterial(activeTab, ref, tag)}
-                    onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
-                    onOvrigtChange={(value) => updateOvrigt(activeTab, value)}
-                  />
+                  ) : (
+                    <CategoryContent
+                      key={activeTab}
+                      category={activeTab}
+                      entry={loaded.categories[activeTab]}
+                      projectId={projectId}
+                      dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
+                      onRemoveMaterial={(ref, tag) => removeMaterial(activeTab, ref, tag)}
+                      onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
+                      onOvrigtChange={(value) => updateOvrigt(activeTab, value)}
+                    />
+                  )}
+                </div>
+
+                {isRoomCategory(activeTab) && (
+                  <TagPalette key={activeTab} projectId={projectId} category={activeTab} onPick={(tag) => appendMaterial(activeTab, tag)} />
                 )}
               </div>
-
-              {isRoomCategory(activeTab) && <TagPalette projectId={projectId} category={activeTab} onPick={(tag) => appendMaterial(activeTab, tag)} />}
             </div>
 
             <DragOverlay>
