@@ -29,7 +29,7 @@ import { ensureInventoryRecord } from './defaultTemplate'
 import { RowTextInput } from './RowTextInput'
 import { RoomPerspectiveNav } from './RoomPerspectiveNav'
 import { tagLabel } from '../tags/tagLabel'
-import { colorForValue } from '../tags/colorForValue'
+import { tagChipStyle } from '../tags/colorForValue'
 import { deleteRoomCascade } from '../data/cascadeDelete'
 import { blurOnEnterEscape, confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
@@ -48,6 +48,8 @@ type Loaded = {
   categories: InventoryRecord['categories']
   antalPersoner: string
   funktionsbeskrivning: string
+  dagsljus: string
+  storlek: string
 }
 
 export function RoomInventorySheet({
@@ -124,6 +126,8 @@ export function RoomInventorySheet({
         categories: record.categories,
         antalPersoner: record.antalPersoner,
         funktionsbeskrivning: record.funktionsbeskrivning,
+        dagsljus: record.dagsljus,
+        storlek: record.storlek,
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,6 +141,8 @@ export function RoomInventorySheet({
         categories: value.categories,
         antalPersoner: value.antalPersoner,
         funktionsbeskrivning: value.funktionsbeskrivning,
+        dagsljus: value.dagsljus,
+        storlek: value.storlek,
         updatedAt: Date.now(),
       }
       await db.inventoryRecords.update(record.id, patch)
@@ -270,6 +276,7 @@ export function RoomInventorySheet({
 
               <div className="room-workspace-body">
                 <div className="room-workspace-main">
+                  <h2 className="active-category-label">{CATEGORY_LABEL[activeTab]}</h2>
                   {activeTab === 'funktion' ? (
                     <div className="inventory-rows">
                       <div className="field">
@@ -291,6 +298,28 @@ export function RoomInventorySheet({
                           placeholder="t.ex. Kommunikationsyta"
                           enterKeyHint="done"
                           onChange={(e) => setField('funktionsbeskrivning', () => e.target.value)}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="dagsljus">Dagsljus</label>
+                        <input
+                          id="dagsljus"
+                          value={loaded.dagsljus}
+                          placeholder="t.ex. Ja, fönster mot gård"
+                          enterKeyHint="done"
+                          onChange={(e) => setField('dagsljus', () => e.target.value)}
+                          onKeyDown={blurOnEnterEscape}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="storlek">Storlek</label>
+                        <input
+                          id="storlek"
+                          value={loaded.storlek}
+                          placeholder="t.ex. 24 m²"
+                          enterKeyHint="done"
+                          onChange={(e) => setField('storlek', () => e.target.value)}
                           onKeyDown={blurOnEnterEscape}
                         />
                       </div>
@@ -318,8 +347,9 @@ export function RoomInventorySheet({
             <DragOverlay>
               {activeDragTag && (
                 <div className="palette-tag drag-preview">
-                  <span className="material-color-dot" style={{ background: colorForValue(activeDragTag.code) }} />
-                  <strong>{activeDragTag.code}</strong>
+                  <span className="tag-chip" style={tagChipStyle(activeDragTag.code)}>
+                    {activeDragTag.code}
+                  </span>
                 </div>
               )}
             </DragOverlay>
@@ -459,8 +489,9 @@ function MaterialEntry({
   return (
     <div ref={setNodeRef} className="material-entry">
       <div className="material-entry-head">
-        <span className="material-color-dot" style={{ background: colorForValue(tag?.code ?? '') }} />
-        <strong>{tagLabel(tag)}</strong>
+        <span className="tag-chip" style={tagChipStyle(tag?.code ?? '')}>
+          {tagLabel(tag)}
+        </span>
         <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
           ✕
         </button>
@@ -520,9 +551,10 @@ function PaletteTag({ tag, onPick }: { tag: MaterialTag; onPick: () => void }) {
       {...attributes}
       {...listeners}
     >
-      <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
       <span className="palette-tag-text">
-        <strong>{tag.code}</strong>
+        <span className="tag-chip" style={tagChipStyle(tag.code)}>
+          {tag.code}
+        </span>
         {tag.description && <span className="field-hint">{tag.description}</span>}
       </span>
     </button>

@@ -23,6 +23,8 @@ export async function ensureInventoryRecord(room: Room): Promise<InventoryRecord
       categories: emptyCategories(),
       antalPersoner: '',
       funktionsbeskrivning: '',
+      dagsljus: '',
+      storlek: '',
       updatedAt: Date.now(),
     }
     await db.inventoryRecords.add(record)

@@ -32,3 +32,15 @@ export function colorForValue(value: string): string {
   }
   return PALETTE[hash % PALETTE.length]
 }
+
+/**
+ * Taggens egen färg som en läsbar chip-stil (ljus tonad bakgrund + samma färg som text) istället
+ * för en liten prick bredvid text – samma mönster återanvänds överallt en tagg visas (taggpalett,
+ * applicerat material, taggöversikt), så det alltid går att känna igen en tagg på samma sätt.
+ * Fungerar med alla PALETTE-färgerna eftersom de redan är mörka/mättade nog att läsas som text.
+ */
+export function tagChipStyle(value: string): { background: string; color: string } {
+  const color = colorForValue(value)
+  if (color === 'transparent') return { background: 'transparent', color: 'inherit' }
+  return { background: `${color}1f`, color }
+}

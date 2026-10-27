@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, ROOM_CATEGORIES, type MaterialTag, type Room, type RoomCategory } from '../../db'
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
-import { colorForValue } from './colorForValue'
+import { tagChipStyle } from './colorForValue'
 import { tagLabel } from './tagLabel'
 import { CloseIcon } from '../../components/icons'
 import { CATEGORY_LABEL } from '../inventory/categories'
@@ -69,9 +69,10 @@ export function TagsOverviewPanel({
                     const roomCount = roomCountByTag?.get(tag.id) ?? 0
                     return (
                       <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
-                        <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
                         <span className="tag-card-text">
-                          <strong>{tagLabel(tag)}</strong>
+                          <span className="tag-chip" style={tagChipStyle(tag.code)}>
+                            {tagLabel(tag)}
+                          </span>
                           <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
                         </span>
                         {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}

@@ -871,6 +871,14 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+/* Visar vilket arbetsläge man är i som text, utöver att ikonen/ytan är markerad – annars är
+   symbolen den enda indikationen, vilket inte alltid räcker för att vara helt säker. */
+.active-category-label {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
 .category-column {
   flex: 1;
   min-width: 0;
@@ -879,10 +887,12 @@ textarea:focus-visible {
   gap: 14px;
 }
 
-/* Golv/vägg/tak är själva de klickbara ytorna (se RoomPerspectiveNav), inga knappar ovanpå. */
+/* Golv/vägg/tak är själva de klickbara ytorna (se RoomPerspectiveNav), inga knappar ovanpå.
+   Höjden sätts explicit (inte bredden) så den alltid linjerar exakt med ikonradens höjd bredvid
+   – bredden följer sedan med automatiskt via SVG:ns eget höjd/bredd-förhållande. */
 .room-perspective-nav {
-  width: 150px;
-  height: auto;
+  height: 140px;
+  width: auto;
   overflow: visible;
 }
 
@@ -890,16 +900,18 @@ textarea:focus-visible {
   cursor: pointer;
   transition: fill 0.12s ease;
   /* Webbläsarens defaultfokusram är en svart, fyrkantig box runt hela gruppens yta – matchar
-     inte alls den enskilda (roterade) ytans form och såg ut som en lös grafikbugg. Egen,
-     tunnare ram via :focus-visible nedan istället. */
+     inte alls den enskilda ytans form och såg ut som en lös grafikbugg. Egen, tunnare ram via
+     :focus-visible nedan istället. */
   outline: none;
 }
 
-.room-perspective-face:hover:not([aria-pressed='true']) rect {
+.room-perspective-face:hover:not([aria-pressed='true']) rect,
+.room-perspective-face:hover:not([aria-pressed='true']) path {
   fill: rgba(22, 78, 99, 0.08);
 }
 
-.room-perspective-face:focus-visible rect {
+.room-perspective-face:focus-visible rect,
+.room-perspective-face:focus-visible path {
   stroke: var(--color-primary);
   stroke-width: 2.5;
 }
@@ -913,10 +925,15 @@ textarea:focus-visible {
   min-height: 40px;
 }
 
+/* Streckad ram runt tomt-läget – gör tydligt att det är EN yta man kan släppa en tagg inom,
+   inte bara en rad text bland annat innehåll. */
 .category-empty {
   color: var(--color-text-muted);
   font-size: 0.85rem;
-  padding: 8px 0;
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
 }
 
 /* En tunn linje som visar exakt var en dragen tagg hamnar (mellan två befintliga material)
@@ -940,9 +957,20 @@ textarea:focus-visible {
   gap: 8px;
 }
 
-.material-entry-head strong {
+.material-entry-head .tag-chip {
   flex: 1;
   min-width: 0;
+}
+
+/* Taggens egen färg som bakgrund på själva texten (se tagChipStyle) istället för en liten prick
+   bredvid – samma chip återanvänds i taggpaletten, applicerat material och taggöversikten, så en
+   tagg alltid känns igen på samma sätt oavsett var den visas. */
+.tag-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -961,7 +989,9 @@ textarea:focus-visible {
   color: var(--color-danger);
 }
 
-/* Fristående taggpalett – ingen omslutande kort/ram, bara löst flytande taggar med luft emellan. */
+/* Fristående taggpalett – ingen omslutande kort/ram runt varje tagg, bara en tunn avskiljande
+   linje mot innehållet till vänster (så det alltid är tydligt vad som är "tillgängligt" kontra
+   "applicerat"), sedan löst flytande taggar med luft emellan. */
 .tag-palette {
   position: sticky;
   top: 0;
@@ -970,6 +1000,8 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  border-left: 1px solid var(--color-border);
+  padding-left: 16px;
 }
 
 .tag-palette-list {
@@ -1024,16 +1056,14 @@ textarea:focus-visible {
 .palette-tag-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
 }
 
-.palette-tag-text strong {
-  font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.palette-tag-text .tag-chip {
+  max-width: 100%;
 }
 
 /* På smalare skärmar (telefon) krymper ralj/palett något så den smala mittenkolumnen ändå får
@@ -1045,11 +1075,12 @@ textarea:focus-visible {
   }
 
   .room-perspective-nav {
-    width: 108px;
+    height: 122px;
   }
 
   .tag-palette {
     width: 112px;
+    padding-left: 10px;
   }
 }
 
@@ -1265,14 +1296,13 @@ textarea:focus-visible {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
 }
 
-.tag-card-text strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tag-card-text .tag-chip {
+  max-width: 100%;
 }
 
 .tag-card-room-count {

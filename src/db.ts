@@ -83,9 +83,11 @@ export interface InventoryRecord {
   roomId: string
   /** En post per fast kategori (se ROOM_CATEGORIES) – alltid alla fem, aldrig fler/färre. */
   categories: Record<RoomCategory, CategoryEntry>
-  /** "Funktion": ett par enkla, fasta fält (inte materialrader) – samma fält på varje rum. */
+  /** "Funktion": enkla, fasta fält (inte materialrader) – samma fält på varje rum. */
   antalPersoner: string
   funktionsbeskrivning: string
+  dagsljus: string
+  storlek: string
   updatedAt: number
 }
 
@@ -367,13 +369,19 @@ class RumsaDB extends Dexie {
 
     this.inventoryRecords.hook('reading', (record: InventoryRecord) => {
       const needsCategories = categoriesNeedNormalizing(record.categories)
-      const needsFunction = typeof record.antalPersoner !== 'string' || typeof record.funktionsbeskrivning !== 'string'
+      const needsFunction =
+        typeof record.antalPersoner !== 'string' ||
+        typeof record.funktionsbeskrivning !== 'string' ||
+        typeof record.dagsljus !== 'string' ||
+        typeof record.storlek !== 'string'
       if (!needsCategories && !needsFunction) return record
       return {
         ...record,
         categories: needsCategories ? normalizeCategories(record.categories) : record.categories,
         antalPersoner: record.antalPersoner ?? '',
         funktionsbeskrivning: record.funktionsbeskrivning ?? '',
+        dagsljus: record.dagsljus ?? '',
+        storlek: record.storlek ?? '',
       }
     })
 

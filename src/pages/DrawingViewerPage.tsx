@@ -23,7 +23,11 @@ export default function DrawingViewerPage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [addRoomMode, setAddRoomMode] = useState(false)
-  const [zoomScale, setZoomScale] = useState(1)
+  // Måste matcha den sparade positionens skala direkt vid montering (inte bara 1) – annars
+  // räknar rumstaggarnas motskalning mot fel zoomnivå under den korta stund innan en faktisk
+  // pan/zoom-interaktion hinner uppdatera värdet, vilket gjorde dem jättestora när man öppnade
+  // visaren på en sida som senast var inzoomad.
+  const [zoomScale, setZoomScale] = useState(() => getViewerPosition(drawingPageId ?? '')?.scale ?? 1)
   const [mainRef, mainSize] = useElementSize<HTMLDivElement>()
   const [showTagsOverview, setShowTagsOverview] = useState(false)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
@@ -144,7 +148,7 @@ export default function DrawingViewerPage() {
   }
 
   function goTo(pageId: string) {
-    setZoomScale(1)
+    setZoomScale(getViewerPosition(pageId)?.scale ?? 1)
     navigate(`/project/${projectId}/viewer/${pageId}`, { replace: true })
   }
 

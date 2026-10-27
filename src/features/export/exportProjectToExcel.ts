@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 import { db, ROOM_CATEGORIES, type CategoryEntry, type Project } from '../../db'
 import { CATEGORY_LABEL } from '../inventory/categories'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Kategori', 'Material', 'Övrigt']
+const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Dagsljus', 'Storlek', 'Kategori', 'Material', 'Övrigt']
 const LEGEND_HEADER = ['Kategori', 'Kod', 'Beskrivning']
 
 /**
@@ -57,7 +57,18 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
       : []
 
     if (categoriesWithContent.length === 0) {
-      data.push([levelName, room.roomNumber, room.roomName, record?.antalPersoner ?? '', record?.funktionsbeskrivning ?? '', '', '', ''])
+      data.push([
+        levelName,
+        room.roomNumber,
+        room.roomName,
+        record?.antalPersoner ?? '',
+        record?.funktionsbeskrivning ?? '',
+        record?.dagsljus ?? '',
+        record?.storlek ?? '',
+        '',
+        '',
+        '',
+      ])
     } else {
       for (const category of categoriesWithContent) {
         const entry = record!.categories[category]
@@ -67,6 +78,8 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
           room.roomName,
           record?.antalPersoner ?? '',
           record?.funktionsbeskrivning ?? '',
+          record?.dagsljus ?? '',
+          record?.storlek ?? '',
           CATEGORY_LABEL[category],
           formatMaterials(entry),
           entry.ovrigt,
@@ -78,7 +91,18 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   const workbook = XLSX.utils.book_new()
 
   const sheet = XLSX.utils.aoa_to_sheet(data)
-  sheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 40 }, { wch: 40 }]
+  sheet['!cols'] = [
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 40 },
+    { wch: 40 },
+  ]
   XLSX.utils.book_append_sheet(workbook, sheet, 'Inventering')
 
   const legendData: (string | number)[][] = [LEGEND_HEADER]
