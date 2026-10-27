@@ -726,11 +726,12 @@ textarea:focus-visible {
   max-width: 560px;
 }
 
-/* Bredare kort på dator – med grupper/draghandtag och fyra fält per rad kändes 560px trångt på
-   en skärm som ändå har gott om plats att ge. */
+/* Lite bredare på dator för att få plats med ikonral + innehåll + taggpalett sida vid sida –
+   men inte bredare än så, annars blir det mest tomt vitt runt det numera ganska kompakta
+   innehållet. */
 @media (min-width: 900px) {
   .inventory-sheet {
-    max-width: 1040px;
+    max-width: 680px;
   }
 }
 
@@ -789,33 +790,21 @@ textarea:focus-visible {
   gap: 16px;
 }
 
-.inventory-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  transition: background-color 0.1s ease, box-shadow 0.1s ease;
-}
-
-/* --- Rumskortets ikonbaserade arbetsläge (kategorirad, rader, taggpalett, dra & släpp) ---
-   Den gråskaliga "bläck"-tonen här (svart/vitt/neutrala gråtoner, ingen färg) och det markerade
-   läget (mörk/svart yta istället för appens vanliga primärfärg) är medvetet lånat från
-   Återbruksmatcharens ikonral/arbetsläges-docka, för en liknande, ren verktygskänsla. */
+/* --- Rumskortets ikonbaserade arbetsläge (kategorirad, platt materiallista, fristående
+   taggpalett, dra & släpp) --- Den gråskaliga "bläck"-tonen här (svart/vitt/neutrala gråtoner,
+   ingen färg) och det markerade läget (mörk/svart yta istället för appens vanliga primärfärg) är
+   medvetet lånat från Återbruksmatcharens ikonral/arbetsläges-docka, för en liknande, ren
+   verktygskänsla. */
 .room-workspace {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 16px;
   /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
      osynligt istället för att bara krävas lite horisontell scroll för att nå. */
   overflow-x: auto;
 }
 
-.category-column,
-.category-items,
-.inventory-row {
+.category-column {
   min-width: 0;
 }
 
@@ -854,53 +843,89 @@ textarea:focus-visible {
 
 .category-column {
   flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.category-items {
+.category-illustration {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+}
+
+/* Platt lista – ett materialnamn + dess fritextrad i taget, ingen omgivande kort/ram per post,
+   bara luft mellan varje. */
+.material-flat-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 60px;
+  gap: 14px;
+  min-height: 40px;
   border-radius: var(--radius-md);
   transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .category-empty {
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 8px 0;
 }
 
-/* Visar tydligt att en rad (eller kategorins tomma yta) är "över" vid en dragning – annars var
-   det otydligt om man faktiskt skulle träffa raden om man släppte nu. */
+/* Visar tydligt att kategorins yta är "över" vid en dragning – annars var det otydligt om man
+   faktiskt skulle träffa den om man släppte nu. */
 .drop-target {
   background: rgba(22, 78, 99, 0.08);
   box-shadow: 0 0 0 2px var(--color-primary) inset;
 }
 
+.material-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.material-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.material-entry-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-entry-remove {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+}
+
+.material-entry-remove:active {
+  background: var(--color-bg);
+  color: var(--color-danger);
+}
+
+/* Fristående taggpalett – ingen omslutande kort/ram, bara löst flytande taggar med luft emellan. */
 .tag-palette {
   position: sticky;
   top: 0;
   flex-shrink: 0;
-  width: 180px;
+  width: 160px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #fafafa;
-  border: 1px solid #e4e4e7;
-  border-radius: 14px;
-  padding: 10px;
+  gap: 10px;
 }
 
 .tag-palette-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   max-height: 60vh;
   overflow-y: auto;
 }
@@ -911,12 +936,14 @@ textarea:focus-visible {
   gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 8px;
-  border: 1px solid #e4e4e7;
-  border-radius: 10px;
-  background: #ffffff;
+  padding: 6px 4px;
+  border-radius: 8px;
   cursor: grab;
   touch-action: none;
+}
+
+.palette-tag:hover {
+  background: #ececea;
 }
 
 .palette-tag:active {
@@ -943,7 +970,7 @@ textarea:focus-visible {
 }
 
 /* På smalare skärmar (telefon) krymper ralj/palett något så den smala mittenkolumnen ändå får
-   rimligt med plats – samma 3-kolumners arbetsläge som på dator, bara mer kompakt. */
+   rimligt med plats – samma arbetsläge som på dator, bara mer kompakt. */
 @media (max-width: 640px) {
   .category-rail-btn {
     width: 34px;
@@ -951,17 +978,8 @@ textarea:focus-visible {
   }
 
   .tag-palette {
-    width: 128px;
+    width: 112px;
   }
-}
-
-.row-group-add-row {
-  align-self: flex-start;
-  color: var(--color-primary);
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 6px 2px;
-  min-height: 36px;
 }
 
 /* Elementet som följer pekaren under en dragning (DragOverlay) – lite lyft/skuggat så det känns
@@ -970,42 +988,9 @@ textarea:focus-visible {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
   opacity: 0.95;
   cursor: grabbing;
-}
-
-.inventory-row-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.inventory-surface-name {
-  flex: 1;
-  /* Annars tvingar inputens implicita min-width:auto hela raden (och syskonen i
-     .room-workspace, t.ex. taggpaletten) bredare än tillgängligt utrymme på en smal skärm. */
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font-weight: 600;
-  font-size: 1rem;
+  background: var(--color-surface);
   padding: 6px 4px;
-  min-height: 36px;
-  border-bottom: 1px dashed var(--color-border);
-}
-
-.inventory-surface-name:focus {
-  outline: none;
-  box-shadow: none;
-  border-bottom: 1px solid var(--color-primary);
-}
-
-.inventory-remove-row {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-  border-radius: 50%;
-}
-
-.inventory-remove-row:active {
-  background: var(--color-border);
+  border-radius: 8px;
 }
 
 /* --- Materialförslag --- */
@@ -1091,76 +1076,6 @@ textarea:focus-visible {
   color: var(--color-text-muted);
   font-size: 0.78rem;
   margin-left: 4px;
-}
-
-/* --- Materialreferenser (taggar på en rad) --- */
-
-.material-ref-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.material-ref-chip {
-  display: flex;
-  align-items: stretch;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-}
-
-/* Hela chippen utom ta-bort-knappen är klickbar – tryck för att ändra tagg/notering i efterhand
-   (t.ex. om man la till materialet utan notering första gången). */
-.material-ref-chip-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 6px 10px 10px;
-  text-align: left;
-}
-
-.material-ref-chip-main:active {
-  background: var(--color-bg);
-}
-
-.material-ref-chip strong {
-  white-space: nowrap;
-  /* Namnet ska aldrig krympa bort eller klippas – det är noteringen (se nedan) som ska ge med
-     sig och ellipsas om utrymmet inte räcker, aldrig materialets namn. */
-  flex-shrink: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.material-ref-note {
-  color: var(--color-text-muted);
-  font-size: 0.82rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  /* Krävs för att text-overflow/ellipsis överhuvudtaget ska kunna krympa den här flex-posten –
-     annars tvingar den (och därmed hela raden, inklusive namnet) ut i overflow istället. */
-  min-width: 0;
-}
-
-.material-ref-remove {
-  flex-shrink: 0;
-  align-self: center;
-  margin-right: 6px;
-  color: var(--color-text-muted);
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-}
-
-.material-ref-remove:active {
-  background: var(--color-bg);
-  color: var(--color-danger);
 }
 
 .material-add-btn {
@@ -1312,13 +1227,6 @@ textarea:focus-visible {
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   z-index: 2;
-}
-
-.btn-ghost-light {
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .save-status[data-status='error'] {

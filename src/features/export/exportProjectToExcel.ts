@@ -1,14 +1,14 @@
 import * as XLSX from 'xlsx'
-import { db, ROOM_CATEGORIES, type InventoryRow, type Project } from '../../db'
+import { db, ROOM_CATEGORIES, type CategoryEntry, type Project } from '../../db'
 import { CATEGORY_LABEL } from '../inventory/categories'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Kategori', 'Namn', 'Rivning', 'Material', 'Övrigt']
+const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Kategori', 'Material', 'Övrigt']
 const LEGEND_HEADER = ['Kategori', 'Kod', 'Beskrivning']
 
 /**
- * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per inventeringspost per
- * rum i huvudfliken (med en Kategori-kolumn, eftersom Golv/Vägg/Tak/Övrigt/Utrustning nu är en
- * fast indelning snarare än separata flikar), sorterat per nivå (högst plan först) och
+ * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per kategori med
+ * innehåll per rum i huvudfliken (Kategori-kolumn, eftersom Golv/Vägg/Tak/Övrigt/Utrustning är
+ * en fast indelning snarare än separata flikar), sorterat per nivå (högst plan först) och
  * rumsnummer, plus en taggförteckning. Laddas ner direkt i webbläsaren.
  */
 export async function exportProjectToExcel(project: Project): Promise<void> {
@@ -36,8 +36,8 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     return a.roomNumber.localeCompare(b.roomNumber, 'sv', { numeric: true })
   })
 
-  const formatTags = (row: Pick<InventoryRow, 'materials'>) =>
-    row.materials
+  const formatMaterials = (entry: Pick<CategoryEntry, 'materials'>) =>
+    entry.materials
       .map((m) => {
         // `?? 'Okänd tagg'` ensam missar en tagg som finns men har tom kod (t.ex. gammal
         // testdata) – det gav tidigare ett helt namnlöst material i exporten.
@@ -52,24 +52,24 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
     const record = recordByRoomId.get(room.id)
 
-    const items = record?.items.filter(
-      (item) => item.surface.trim() || item.rivning.trim() || item.materials.length > 0 || item.ovrigt.trim(),
-    )
-    if (!items || items.length === 0) {
-      data.push([levelName, room.roomNumber, room.roomName, record?.antalPersoner ?? '', record?.funktionsbeskrivning ?? '', '', '', '', '', ''])
+    const categoriesWithContent = record
+      ? ROOM_CATEGORIES.filter((c) => record.categories[c].materials.length > 0 || record.categories[c].ovrigt.trim())
+      : []
+
+    if (categoriesWithContent.length === 0) {
+      data.push([levelName, room.roomNumber, room.roomName, record?.antalPersoner ?? '', record?.funktionsbeskrivning ?? '', '', '', ''])
     } else {
-      for (const item of items) {
+      for (const category of categoriesWithContent) {
+        const entry = record!.categories[category]
         data.push([
           levelName,
           room.roomNumber,
           room.roomName,
           record?.antalPersoner ?? '',
           record?.funktionsbeskrivning ?? '',
-          CATEGORY_LABEL[item.category],
-          item.surface,
-          item.rivning,
-          formatTags(item),
-          item.ovrigt,
+          CATEGORY_LABEL[category],
+          formatMaterials(entry),
+          entry.ovrigt,
         ])
       }
     }
@@ -78,18 +78,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   const workbook = XLSX.utils.book_new()
 
   const sheet = XLSX.utils.aoa_to_sheet(data)
-  sheet['!cols'] = [
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 20 },
-    { wch: 12 },
-    { wch: 30 },
-    { wch: 12 },
-    { wch: 20 },
-    { wch: 40 },
-    { wch: 40 },
-    { wch: 40 },
-  ]
+  sheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 40 }, { wch: 40 }]
   XLSX.utils.book_append_sheet(workbook, sheet, 'Inventering')
 
   const legendData: (string | number)[][] = [LEGEND_HEADER]

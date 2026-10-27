@@ -32,12 +32,13 @@ export const CATEGORY_ICON: Record<RoomTab, ComponentType<SVGProps<SVGSVGElement
   ovrigt: OtherIcon,
 }
 
-/** Rivning är bara relevant för ytskiktskategorierna – Utrustning har ingen "rivning" att ange. */
-export const CATEGORY_HAS_RIVNING: Record<RoomCategory, boolean> = {
+/** Golv/Vägg/Tak får en liten dekorativ perspektivillustration överst i sin kategori (som en
+ * förenklad version av rummets uppbyggnad) – Övrigt/Utrustning har ingen naturlig motsvarighet. */
+export const CATEGORY_HAS_ILLUSTRATION: Record<RoomCategory, boolean> = {
   golv: true,
   vagg: true,
   tak: true,
-  ovrigt: true,
+  ovrigt: false,
   utrustning: false,
 }
 

@@ -5,48 +5,56 @@ import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
 
 const MAX_SUGGESTIONS = 6
 
-type FreeTextField = 'rivning' | 'ovrigt'
+/** 'ovrigt' = kategorins samlade övrigt-fält, 'materialNote' = ett enskilt materials fritextrad
+ * (t.ex. "upp till 1200mm") – olika källor i datan, men samma förslagsbeteende. */
+type SuggestionSource = 'ovrigt' | 'materialNote'
 
-/** Räknar fram vilka texter som redan använts i det här fältet i projektet, för att kunna
- * föreslå dem igen (t.ex. samma rivningstext i flera rum). */
-function useFieldSuggestions(projectId: string, field: FreeTextField): string[] {
+/** Räknar fram vilka texter som redan använts för den här typen av fält i projektet, för att
+ * kunna föreslå dem igen (t.ex. samma övrigt-anteckning i flera rum). */
+function useFieldSuggestions(projectId: string, source: SuggestionSource): string[] {
   const suggestions = useLiveQuery(async () => {
     const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
-      for (const item of record.items) {
-        const text = item[field].trim()
-        if (!text) continue
-        counts.set(text, (counts.get(text) ?? 0) + 1)
+      for (const entry of Object.values(record.categories)) {
+        if (source === 'ovrigt') {
+          const text = entry.ovrigt.trim()
+          if (text) counts.set(text, (counts.get(text) ?? 0) + 1)
+        } else {
+          for (const m of entry.materials) {
+            const text = m.note.trim()
+            if (text) counts.set(text, (counts.get(text) ?? 0) + 1)
+          }
+        }
       }
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([text]) => text)
-  }, [projectId, field])
+  }, [projectId, source])
   return suggestions ?? []
 }
 
 /**
- * Enkelt textfält med förslag från tidigare ifyllda texter i samma fält (Rivning eller Övrigt)
- * i projektet. Till skillnad från materialfältet (se MaterialReferenceEditor) är det här fri
- * löptext, inte en återanvändbar tagg – därför bara förslag, ingen separat lagring.
+ * Enkelt textfält med förslag från tidigare ifyllda texter av samma sort i projektet. Till
+ * skillnad från materialtaggarna är det här fri löptext – därför bara förslag, ingen separat
+ * lagring.
  */
 export function RowTextInput({
   projectId,
-  field,
+  source,
   value,
   onChange,
   placeholder,
   inputId,
 }: {
   projectId: string
-  field: FreeTextField
+  source: SuggestionSource
   value: string
   onChange: (value: string) => void
   placeholder?: string
   inputId?: string
 }) {
-  const suggestions = useFieldSuggestions(projectId, field)
+  const suggestions = useFieldSuggestions(projectId, source)
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 

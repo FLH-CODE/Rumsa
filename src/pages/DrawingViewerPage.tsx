@@ -71,7 +71,7 @@ export default function DrawingViewerPage() {
     if (!filterTagId) return null
     const set = new Set<string>()
     for (const record of records ?? []) {
-      if (record.items.some((item) => item.materials.some((m) => m.tagId === filterTagId))) {
+      if (Object.values(record.categories).some((entry) => entry.materials.some((m) => m.tagId === filterTagId))) {
         set.add(record.roomId)
       }
     }
@@ -292,7 +292,6 @@ export default function DrawingViewerPage() {
           room={selectedRoom}
           projectId={projectId}
           onClose={() => setSelectedRoom(null)}
-          onOpenRoom={handleOpenRoom}
         />
       )}
       {filterSheetOpen && (

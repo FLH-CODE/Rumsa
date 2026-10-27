@@ -68,22 +68,22 @@ export interface MaterialReference {
 export const ROOM_CATEGORIES = ['golv', 'vagg', 'tak', 'ovrigt', 'utrustning'] as const
 export type RoomCategory = (typeof ROOM_CATEGORIES)[number]
 
-export interface InventoryRow {
-  id: string
-  category: RoomCategory
-  surface: string
-  rivning: string
+/**
+ * En kategoris innehåll på ett rumskort: en platt lista materialtaggar (var och en med sin egen
+ * fritextnotering) plus ett enda samlat Övrigt-fält – inga namngivna "rader" eller separata
+ * rivningsfält. Varje rum har exakt en sådan post per fast kategori.
+ */
+export interface CategoryEntry {
   materials: MaterialReference[]
-  /** Fritextfält för övrigt som inte passar in i Rivning/Material, t.ex. anmärkningar om skicket. */
   ovrigt: string
 }
 
 export interface InventoryRecord {
   id: string
   roomId: string
-  /** Alla rader, oavsett kategori – se InventoryRow.category. */
-  items: InventoryRow[]
-  /** "Funktion": ett par enkla, fasta fält (inte rader) – samma fält på varje rum. */
+  /** En post per fast kategori (se ROOM_CATEGORIES) – alltid alla fem, aldrig fler/färre. */
+  categories: Record<RoomCategory, CategoryEntry>
+  /** "Funktion": ett par enkla, fasta fält (inte materialrader) – samma fält på varje rum. */
   antalPersoner: string
   funktionsbeskrivning: string
   updatedAt: number
@@ -260,7 +260,7 @@ class RumsaDB extends Dexie {
         await tx
           .table('inventoryRecords')
           .toCollection()
-          .modify((record: InventoryRecord & { rows?: unknown[]; equipmentRows?: unknown[] }) => {
+          .modify((record: { rows?: unknown[]; equipmentRows?: unknown[]; items?: unknown[] }) => {
             type LegacyRow = {
               id: string
               surface?: string
@@ -269,7 +269,15 @@ class RumsaDB extends Dexie {
               ovrigt?: string
               groupId?: string | null
             }
-            const items: InventoryRow[] = []
+            type LegacyItem = {
+              id: string
+              category: RoomCategory
+              surface: string
+              rivning: string
+              materials: MaterialReference[]
+              ovrigt: string
+            }
+            const items: LegacyItem[] = []
             for (const row of (record.rows as LegacyRow[] | undefined) ?? []) {
               items.push({
                 id: row.id,
@@ -296,29 +304,74 @@ class RumsaDB extends Dexie {
           })
       })
 
-    // Normaliserar varje läst post så att `items` alltid är en array med giltiga fält, oavsett vad
-    // som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post med den gamla formen innan
-    // den själv laddade om efter en uppgradering. Utan detta kraschar varje ställe som gör
-    // `item.materials.some/.map/.filter` eller läser `item.ovrigt`/`item.category` på en sådan post.
-    const normalizeItems = (items: InventoryRow[]) =>
-      items.map((item) => ({
-        ...item,
-        category: ROOM_CATEGORIES.includes(item.category) ? item.category : 'ovrigt',
-        materials: item.materials ?? [],
-        ovrigt: item.ovrigt ?? '',
-      }))
-    const itemsNeedNormalizing = (items: InventoryRow[] | undefined) =>
-      items?.some(
-        (item) => !ROOM_CATEGORIES.includes(item.category) || !Array.isArray(item.materials) || typeof item.ovrigt !== 'string',
-      ) ?? false
+    // v7: rumskortet görs plattare – istället för namngivna rader (med Namn/Rivning) blir varje
+    // kategori bara en lista materialtaggar (var och en med sin egen fritextnotering) plus ETT
+    // samlat Övrigt-fält. Rivning fanns bara för Ytskikt-kategorierna och hade ingen egen plats i
+    // den nya, enklare modellen – befintlig rivningstext (och ev. radnamn som inte bara var
+    // kategorins eget namn) bevaras genom att skrivas in i kategorins Övrigt-fält istället för
+    // att tyst försvinna.
+    this.version(7).upgrade(async (tx) => {
+      await tx
+        .table('inventoryRecords')
+        .toCollection()
+        .modify((record: InventoryRecord & { items?: unknown[] }) => {
+          type LegacyItem = {
+            category: RoomCategory
+            surface?: string
+            rivning?: string
+            materials?: MaterialReference[]
+            ovrigt?: string
+          }
+          // Radnamn som bara upprepar kategorins eget default-namn (från den gamla
+          // standardmallens auto-skapade rader, t.ex. en "Golv"-rad i golv-kategorin) är inte
+          // riktigt användarinnehåll – de skippas så att en orörd standardrad inte lämnar ett
+          // meningslöst "Yta: Golv" i Övrigt.
+          const defaultSurfaceByCategory: Record<string, string> = { golv: 'golv', vagg: 'vägg', tak: 'tak' }
+          const categories: Record<string, CategoryEntry> = Object.fromEntries(
+            ROOM_CATEGORIES.map((c) => [c, { materials: [], ovrigt: '' }]),
+          )
+          for (const item of (record.items as LegacyItem[] | undefined) ?? []) {
+            const entry = categories[item.category] ?? categories.ovrigt
+            entry.materials.push(...(item.materials ?? []))
+            const trimmedSurface = item.surface?.trim() ?? ''
+            const isDefaultSurfaceName = trimmedSurface.toLowerCase() === defaultSurfaceByCategory[item.category]
+            const extraNotes: string[] = []
+            if (trimmedSurface && !isDefaultSurfaceName) extraNotes.push(`Yta: ${trimmedSurface}`)
+            if (item.rivning && item.rivning.trim()) extraNotes.push(`Rivning: ${item.rivning.trim()}`)
+            if (item.ovrigt && item.ovrigt.trim()) extraNotes.push(item.ovrigt.trim())
+            if (extraNotes.length > 0) {
+              entry.ovrigt = entry.ovrigt ? `${entry.ovrigt}\n${extraNotes.join(' | ')}` : extraNotes.join(' | ')
+            }
+          }
+          record.categories = categories as Record<RoomCategory, CategoryEntry>
+          delete record.items
+        })
+    })
+
+    // Normaliserar varje läst post så att `categories` alltid har alla fem fasta kategorier med
+    // giltiga fält, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post
+    // med den gamla formen innan den själv laddade om efter en uppgradering. Utan detta kraschar
+    // varje ställe som gör `record.categories[c].materials.some/.map/.filter`.
+    const normalizeCategories = (categories: Record<string, CategoryEntry> | undefined): Record<RoomCategory, CategoryEntry> =>
+      Object.fromEntries(
+        ROOM_CATEGORIES.map((c) => [
+          c,
+          { materials: categories?.[c]?.materials ?? [], ovrigt: categories?.[c]?.ovrigt ?? '' },
+        ]),
+      ) as Record<RoomCategory, CategoryEntry>
+    const categoriesNeedNormalizing = (categories: Record<string, CategoryEntry> | undefined) =>
+      !categories ||
+      ROOM_CATEGORIES.some(
+        (c) => !Array.isArray(categories[c]?.materials) || typeof categories[c]?.ovrigt !== 'string',
+      )
 
     this.inventoryRecords.hook('reading', (record: InventoryRecord) => {
-      const needsItems = !Array.isArray(record.items) || itemsNeedNormalizing(record.items)
+      const needsCategories = categoriesNeedNormalizing(record.categories)
       const needsFunction = typeof record.antalPersoner !== 'string' || typeof record.funktionsbeskrivning !== 'string'
-      if (!needsItems && !needsFunction) return record
+      if (!needsCategories && !needsFunction) return record
       return {
         ...record,
-        items: needsItems ? normalizeItems(record.items ?? []) : record.items,
+        categories: needsCategories ? normalizeCategories(record.categories) : record.categories,
         antalPersoner: record.antalPersoner ?? '',
         funktionsbeskrivning: record.funktionsbeskrivning ?? '',
       }

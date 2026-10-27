@@ -1,4 +1,4 @@
-import { db } from '../../db'
+import { db, type InventoryRecord } from '../../db'
 
 /**
  * Tar bort ett helt projekt och allt som hör till det – ritningar (inkl. PDF-blobbar), sidor,
@@ -58,13 +58,15 @@ export async function deleteMaterialTagCascade(projectId: string, tagId: string)
     const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     for (const record of records) {
-      const hasReference = record.items.some((item) => item.materials.some((m) => m.tagId === tagId))
+      const hasReference = Object.values(record.categories).some((entry) => entry.materials.some((m) => m.tagId === tagId))
       if (!hasReference) continue
       await db.inventoryRecords.update(record.id, {
-        items: record.items.map((item) => ({
-          ...item,
-          materials: item.materials.filter((m) => m.tagId !== tagId),
-        })),
+        categories: Object.fromEntries(
+          Object.entries(record.categories).map(([category, entry]) => [
+            category,
+            { ...entry, materials: entry.materials.filter((m) => m.tagId !== tagId) },
+          ]),
+        ) as InventoryRecord['categories'],
       })
     }
     await db.materialTags.delete(tagId)

@@ -15,8 +15,9 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   db,
   createId,
+  type CategoryEntry,
   type InventoryRecord,
-  type InventoryRow,
+  type MaterialReference,
   type MaterialTag,
   type Room,
   type RoomCategory,
@@ -24,12 +25,12 @@ import {
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { RowTextInput } from './RowTextInput'
-import { MaterialReferenceEditor } from '../tags/MaterialReferenceEditor'
-import { TagsOverviewPanel } from '../tags/TagsOverviewPanel'
+import { CategoryIllustration } from './CategoryIllustration'
+import { tagLabel } from '../tags/tagLabel'
 import { colorForValue } from '../tags/colorForValue'
 import { deleteRoomCascade } from '../data/cascadeDelete'
 import { blurOnEnterEscape, confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { ROOM_TABS, CATEGORY_LABEL, CATEGORY_ICON, CATEGORY_HAS_RIVNING, isRoomCategory, type RoomTab } from './categories'
+import { ROOM_TABS, CATEGORY_LABEL, CATEGORY_ICON, CATEGORY_HAS_ILLUSTRATION, isRoomCategory, type RoomTab } from './categories'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -40,30 +41,21 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
 
 type Loaded = {
   recordId: string
-  items: InventoryRow[]
+  categories: InventoryRecord['categories']
   antalPersoner: string
   funktionsbeskrivning: string
-}
-
-function newEmptyItem(category: RoomCategory): InventoryRow {
-  return { id: createId(), category, surface: '', rivning: '', materials: [], ovrigt: '' }
 }
 
 export function RoomInventorySheet({
   room,
   projectId,
   onClose,
-  onOpenRoom,
 }: {
   room: Room
   projectId: string
   onClose: () => void
-  /** Vidarebefordras till taggöversiktens "Används i"-lista, så man kan hoppa direkt till ett
-   * annat rum som använder samma tagg utan att behöva stänga och leta upp det manuellt. */
-  onOpenRoom?: (room: Room) => void
 }) {
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [showTags, setShowTags] = useState(false)
   const [activeTab, setActiveTab] = useState<RoomTab>('funktion')
   const [activeDragTag, setActiveDragTag] = useState<MaterialTag | null>(null)
 
@@ -101,20 +93,14 @@ export function RoomInventorySheet({
 
   // Escape ska gå att trycka för att komma ut ur rumskortet, inte bara ur ett enskilt fält –
   // annars var det enda sättet att stänga att träffa bakgrunden exakt eller trycka "Klar".
-  // Om taggöversikten är öppen ovanpå stängs den först, som i vilken annan modal-stapling som helst.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (showTags) {
-        setShowTags(false)
-      } else {
-        void handleClose()
-      }
+      if (e.key === 'Escape') void handleClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showTags, roomNumber])
+  }, [roomNumber])
 
   useEffect(() => {
     ensureInventoryRecord(room).catch((err) => {
@@ -130,7 +116,7 @@ export function RoomInventorySheet({
     if (record && record.id !== loaded?.recordId) {
       setLoaded({
         recordId: record.id,
-        items: record.items,
+        categories: record.categories,
         antalPersoner: record.antalPersoner,
         funktionsbeskrivning: record.funktionsbeskrivning,
       })
@@ -143,7 +129,7 @@ export function RoomInventorySheet({
     async (value) => {
       if (!value || !record) return
       const patch: Partial<InventoryRecord> = {
-        items: value.items,
+        categories: value.categories,
         antalPersoner: value.antalPersoner,
         funktionsbeskrivning: value.funktionsbeskrivning,
         updatedAt: Date.now(),
@@ -157,20 +143,27 @@ export function RoomInventorySheet({
     setLoaded((prev) => (prev ? { ...prev, [key]: updater(prev[key]) } : prev))
   }
 
-  const setItems = (updater: (prev: InventoryRow[]) => InventoryRow[]) => setField('items', updater)
+  const setCategoryEntry = (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) =>
+    setField('categories', (categories) => ({ ...categories, [category]: updater(categories[category]) }))
 
-  const updateItem = (itemId: string, patch: Partial<InventoryRow>) =>
-    setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...patch } : item)))
+  const addMaterial = (category: RoomCategory, tag: MaterialTag) =>
+    setCategoryEntry(category, (entry) => ({
+      ...entry,
+      materials: [...entry.materials, { id: createId(), tagId: tag.id, note: '' }],
+    }))
 
-  const removeItem = (itemId: string) => {
-    const current = loaded?.items ?? []
-    const item = current.find((i) => i.id === itemId)
-    const hasContent = Boolean(item?.rivning.trim() || item?.materials.length || item?.ovrigt.trim())
-    if (hasContent && !confirm('Ta bort raden? Ifylld text för raden försvinner.')) return
-    setItems((prev) => prev.filter((i) => i.id !== itemId))
+  const updateMaterialNote = (category: RoomCategory, refId: string, note: string) =>
+    setCategoryEntry(category, (entry) => ({
+      ...entry,
+      materials: entry.materials.map((m) => (m.id === refId ? { ...m, note } : m)),
+    }))
+
+  const removeMaterial = (category: RoomCategory, ref: MaterialReference, tag: MaterialTag | undefined) => {
+    if (!confirm(`Ta bort ${tagLabel(tag)}?`)) return
+    setCategoryEntry(category, (entry) => ({ ...entry, materials: entry.materials.filter((m) => m.id !== ref.id) }))
   }
 
-  const addItem = (category: RoomCategory) => setItems((prev) => [...prev, newEmptyItem(category)])
+  const updateOvrigt = (category: RoomCategory, value: string) => setCategoryEntry(category, (entry) => ({ ...entry, ovrigt: value }))
 
   const handleDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current
@@ -183,21 +176,11 @@ export function RoomInventorySheet({
     if (!over) return
     const activeData = active.data.current
     if (activeData?.type !== 'tag') return
-    const tag = activeData.tag as MaterialTag
     const overData = over.data.current
-    if (overData?.type === 'row') {
-      updateItem(overData.rowId as string, {
-        materials: [...(loaded?.items.find((i) => i.id === overData.rowId)?.materials ?? []), { id: createId(), tagId: tag.id, note: '' }],
-      })
-    } else if (overData?.type === 'category') {
-      setItems((prev) => [
-        ...prev,
-        { ...newEmptyItem(overData.category as RoomCategory), materials: [{ id: createId(), tagId: tag.id, note: '' }] },
-      ])
+    if (overData?.type === 'category') {
+      addMaterial(overData.category as RoomCategory, activeData.tag as MaterialTag)
     }
   }
-
-  const itemsForActiveCategory = isRoomCategory(activeTab) ? (loaded?.items.filter((i) => i.category === activeTab) ?? []) : []
 
   return (
     <div className="modal-backdrop" onClick={() => void handleClose()}>
@@ -266,18 +249,18 @@ export function RoomInventorySheet({
                     </div>
                   </div>
                 ) : (
-                  <CategoryColumn
+                  <CategoryContent
                     category={activeTab}
-                    items={itemsForActiveCategory}
+                    entry={loaded.categories[activeTab]}
                     projectId={projectId}
-                    onUpdateItem={updateItem}
-                    onRemoveItem={removeItem}
-                    onAddItem={() => addItem(activeTab)}
+                    onRemoveMaterial={(ref, tag) => removeMaterial(activeTab, ref, tag)}
+                    onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
+                    onOvrigtChange={(value) => updateOvrigt(activeTab, value)}
                   />
                 )}
               </div>
 
-              {isRoomCategory(activeTab) && <TagPalette projectId={projectId} category={activeTab} />}
+              {isRoomCategory(activeTab) && <TagPalette projectId={projectId} category={activeTab} onPick={(tag) => addMaterial(activeTab, tag)} />}
             </div>
 
             <DragOverlay>
@@ -295,10 +278,7 @@ export function RoomInventorySheet({
           <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
             Ta bort rum
           </button>
-          <button className="btn btn-ghost-light" onClick={() => setShowTags(true)}>
-            Taggar
-          </button>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
             <button className="btn btn-secondary" onClick={() => void handleClose()}>
               Avbryt
             </button>
@@ -308,15 +288,12 @@ export function RoomInventorySheet({
           </div>
         </div>
       </div>
-      {showTags && (
-        <TagsOverviewPanel projectId={projectId} onClose={() => setShowTags(false)} onOpenRoom={onOpenRoom} />
-      )}
     </div>
   )
 }
 
 /** Vänsterikonraden som ersätter de gamla flikarna – klick byter "arbetsläge" (vilken kategoris
- * rader och taggpalett som visas). Den aktiva kategorin markeras med en mörk, grafisk yta
+ * innehåll och taggpalett som visas). Den aktiva kategorin markeras med en mörk, grafisk yta
  * (grå/svart, inte en färg) istället för t.ex. appens vanliga primärfärg, så den tydligt läses
  * som ett eget litet kontrollsystem snarare än ännu en uppsättning vanliga knappar. */
 function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: RoomTab) => void }) {
@@ -341,106 +318,70 @@ function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: R
   )
 }
 
-function CategoryColumn({
+/** En kategoris hela innehåll: en dekorativ perspektivillustration (bara Golv/Vägg/Tak), en platt
+ * lista materialtaggar (var och en med sin egen fritextrad) och ett samlat Övrigt-fält längst ner
+ * – inga separata "rader" eller behållare per material. */
+function CategoryContent({
   category,
-  items,
+  entry,
   projectId,
-  onUpdateItem,
-  onRemoveItem,
-  onAddItem,
+  onRemoveMaterial,
+  onNoteChange,
+  onOvrigtChange,
 }: {
   category: RoomCategory
-  items: InventoryRow[]
+  entry: CategoryEntry
   projectId: string
-  onUpdateItem: (itemId: string, patch: Partial<InventoryRow>) => void
-  onRemoveItem: (itemId: string) => void
-  onAddItem: () => void
+  onRemoveMaterial: (ref: MaterialReference, tag: MaterialTag | undefined) => void
+  onNoteChange: (refId: string, note: string) => void
+  onOvrigtChange: (value: string) => void
 }) {
+  const tags = useLiveQuery(
+    () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).toArray(),
+    [projectId, category],
+  )
+  const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
   const { setNodeRef, isOver } = useDroppable({ id: `category-${category}`, data: { type: 'category', category } })
+
   return (
     <div className="category-column">
-      <div ref={setNodeRef} className={`category-items${isOver ? ' drop-target' : ''}`}>
-        {items.length === 0 && (
-          <p className="field-hint category-empty">Dra en tagg hit, eller tryck på "+ Lägg till rad".</p>
+      {CATEGORY_HAS_ILLUSTRATION[category] && <CategoryIllustration category={category} />}
+      <div ref={setNodeRef} className={`material-flat-list${isOver ? ' drop-target' : ''}`}>
+        {entry.materials.length === 0 && (
+          <p className="field-hint category-empty">Tryck eller dra en tagg hit från listan till höger.</p>
         )}
-        {items.map((item) => (
-          <ItemRow
-            key={item.id}
-            item={item}
-            category={category}
-            projectId={projectId}
-            onUpdate={(patch) => onUpdateItem(item.id, patch)}
-            onRemove={() => onRemoveItem(item.id)}
-          />
+        {entry.materials.map((ref) => (
+          <div key={ref.id} className="material-entry">
+            <div className="material-entry-head">
+              <span className="material-color-dot" style={{ background: colorForValue(tagById.get(ref.tagId)?.code ?? '') }} />
+              <strong>{tagLabel(tagById.get(ref.tagId))}</strong>
+              <button
+                type="button"
+                className="material-entry-remove"
+                onClick={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
+                aria-label={`Ta bort ${tagLabel(tagById.get(ref.tagId))}`}
+              >
+                ✕
+              </button>
+            </div>
+            <RowTextInput
+              projectId={projectId}
+              source="materialNote"
+              value={ref.note}
+              onChange={(value) => onNoteChange(ref.id, value)}
+              placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
+            />
+          </div>
         ))}
       </div>
-      <button type="button" className="row-group-add-row" onClick={onAddItem}>
-        + Lägg till rad
-      </button>
-    </div>
-  )
-}
-
-function ItemRow({
-  item,
-  category,
-  projectId,
-  onUpdate,
-  onRemove,
-}: {
-  item: InventoryRow
-  category: RoomCategory
-  projectId: string
-  onUpdate: (patch: Partial<InventoryRow>) => void
-  onRemove: () => void
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `row-${item.id}`, data: { type: 'row', rowId: item.id } })
-  return (
-    <div ref={setNodeRef} className={`inventory-row${isOver ? ' drop-target' : ''}`}>
-      <div className="inventory-row-header">
-        <input
-          className="inventory-surface-name"
-          value={item.surface}
-          placeholder={`Namn (t.ex. ${CATEGORY_LABEL[category]})`}
-          aria-label="Namn"
-          enterKeyHint="done"
-          onChange={(e) => onUpdate({ surface: e.target.value })}
-          onKeyDown={blurOnEnterEscape}
-        />
-        <button className="inventory-remove-row tap-target" onClick={onRemove} aria-label="Ta bort rad">
-          ✕
-        </button>
-      </div>
-      {CATEGORY_HAS_RIVNING[category] && (
-        <div className="field">
-          <label htmlFor={`rivning-${item.id}`}>Rivning</label>
-          <RowTextInput
-            inputId={`rivning-${item.id}`}
-            projectId={projectId}
-            field="rivning"
-            value={item.rivning}
-            onChange={(value) => onUpdate({ rivning: value })}
-            placeholder="t.ex. Bef. golv rivs."
-          />
-        </div>
-      )}
       <div className="field">
-        <label>Material</label>
-        <MaterialReferenceEditor
-          projectId={projectId}
-          category={category}
-          references={item.materials}
-          onChange={(materials) => onUpdate({ materials })}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor={`ovrigt-${item.id}`}>Övrigt</label>
+        <label htmlFor={`ovrigt-${category}`}>Övrigt</label>
         <RowTextInput
-          inputId={`ovrigt-${item.id}`}
+          inputId={`ovrigt-${category}`}
           projectId={projectId}
-          field="ovrigt"
-          value={item.ovrigt}
-          onChange={(value) => onUpdate({ ovrigt: value })}
+          source="ovrigt"
+          value={entry.ovrigt}
+          onChange={onOvrigtChange}
           placeholder="t.ex. Anmärkning om skicket"
         />
       </div>
@@ -448,9 +389,9 @@ function ItemRow({
   )
 }
 
-/** Alltid synlig taggpalett för den aktiva kategorin, till höger om rumskortets innehåll – man
- * drar en tagg härifrån och släpper den på en rad för att lägga till den (se handleDragEnd). */
-function TagPalette({ projectId, category }: { projectId: string; category: RoomCategory }) {
+/** Alltid synlig, fristående taggpalett för den aktiva kategorin (ingen omslutande behållare) –
+ * en tagg går både att dra och att trycka direkt på för att lägga till den i kortet. */
+function TagPalette({ projectId, category, onPick }: { projectId: string; category: RoomCategory; onPick: (tag: MaterialTag) => void }) {
   const tags = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).sortBy('code'),
     [projectId, category],
@@ -463,7 +404,7 @@ function TagPalette({ projectId, category }: { projectId: string; category: Room
         {tags === undefined ? null : tags.length === 0 && !creating ? (
           <p className="field-hint">Inga taggar ännu.</p>
         ) : (
-          tags.map((tag) => <PaletteTag key={tag.id} tag={tag} />)
+          tags.map((tag) => <PaletteTag key={tag.id} tag={tag} onPick={() => onPick(tag)} />)
         )}
       </div>
       {creating ? (
@@ -477,7 +418,7 @@ function TagPalette({ projectId, category }: { projectId: string; category: Room
   )
 }
 
-function PaletteTag({ tag }: { tag: MaterialTag }) {
+function PaletteTag({ tag, onPick }: { tag: MaterialTag; onPick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `palette-${tag.id}`,
     data: { type: 'tag', tag },
@@ -488,6 +429,7 @@ function PaletteTag({ tag }: { tag: MaterialTag }) {
       ref={setNodeRef}
       className={`palette-tag${isDragging ? ' dragging' : ''}`}
       style={{ transform: CSS.Translate.toString(transform) }}
+      onClick={onPick}
       {...attributes}
       {...listeners}
     >

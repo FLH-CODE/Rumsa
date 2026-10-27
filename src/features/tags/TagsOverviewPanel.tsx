@@ -37,7 +37,7 @@ export function TagsOverviewPanel({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const counts = new Map<string, number>()
     for (const record of records) {
-      const tagIds = new Set(record.items.flatMap((item) => item.materials.map((m) => m.tagId)))
+      const tagIds = new Set(Object.values(record.categories).flatMap((entry) => entry.materials.map((m) => m.tagId)))
       for (const tagId of tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1)
     }
     return counts
@@ -130,7 +130,7 @@ function TagEditSheet({
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     const matchingRoomIds = new Set(
       records
-        .filter((record) => record.items.some((item) => item.materials.some((m) => m.tagId === tag.id)))
+        .filter((record) => Object.values(record.categories).some((entry) => entry.materials.some((m) => m.tagId === tag.id)))
         .map((record) => record.roomId),
     )
     return [...matchingRoomIds]
