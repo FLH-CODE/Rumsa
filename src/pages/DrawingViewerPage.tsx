@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
@@ -12,7 +12,7 @@ import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForValue } from '../features/tags/colorForValue'
-import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
+import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon, FullscreenEnterIcon, FullscreenExitIcon } from '../components/icons'
 import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
 export default function DrawingViewerPage() {
@@ -29,6 +29,28 @@ export default function DrawingViewerPage() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
   const [renamingLevel, setRenamingLevel] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
+
+  // Manifestets display:"fullscreen" gäller bara en genväg man lagt till på hemskärmen – i en
+  // vanlig öppen webbläsarflik (som den man ser i en vanlig Chrome-flik) går det inte att dölja
+  // adressfältet utan att användaren själv aktivt begär helskärm, därav knappen. Lyssnar på
+  // fullscreenchange också, så ikonen stämmer om man lämnar helskärm med Esc/systemets tillbaka.
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', handleChange)
+    return () => document.removeEventListener('fullscreenchange', handleChange)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void document.documentElement.requestFullscreen().catch(() => {
+        // Vissa webbläsare (t.ex. iOS Safari) saknar stöd för Fullscreen API helt – då finns
+        // ingen bättre reserv än att låta adressfältet synas kvar.
+      })
+    }
+  }
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -179,6 +201,13 @@ export default function DrawingViewerPage() {
           aria-label="Materialtaggar"
         >
           <TagIcon width={20} height={20} />
+        </button>
+        <button
+          className="viewer-float-btn"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Avsluta helskärm' : 'Helskärm'}
+        >
+          {isFullscreen ? <FullscreenExitIcon width={20} height={20} /> : <FullscreenEnterIcon width={20} height={20} />}
         </button>
       </div>
       {/* Flik i vänsterkanten, som ett bokmärke man drar ut/in – istället för en knapp bland de

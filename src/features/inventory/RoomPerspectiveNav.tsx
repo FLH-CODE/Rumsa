@@ -4,12 +4,15 @@ import { CATEGORY_LABEL } from './categories'
 
 const STROKE = '#b8c2c7'
 const HIGHLIGHT = 'rgba(22, 78, 99, 0.38)'
+/** Samma hörnradie som appens övriga behållare (--radius-md), så ytorna känns som en del av
+ * samma formspråk istället för en egen, spretig grafik. */
+const RADIUS = 10
 
 /**
- * Ett enda rumshörn i grov en-punktsperspektiv – golvet, taket och väggarna är själva de
- * klickbara ytorna (inga separata knappar ovanpå), precis som i principskissen. Den aktiva ytan
- * får en highlight-fyllning istället för att en ikon markeras någon annanstans, så det alltid är
- * tydligt vilken yta man redigerar.
+ * Tre fristående ytor (vägg/tak/golv) med mellanrum emellan, istället för en sammanhängande
+ * perspektivteckning – golvet/taket "fjädrar ut" från väggen ungefär som i principskissen. Varje
+ * yta är själv den klickbara knappen (inga separata ikoner ovanpå); den aktiva ytan får en
+ * highlight-fyllning istället för att en ikon markeras någon annanstans.
  */
 export function RoomPerspectiveNav({
   active,
@@ -27,7 +30,7 @@ export function RoomPerspectiveNav({
 
   const fill = (category: RoomCategory) => (active === category ? HIGHLIGHT : 'transparent')
 
-  const faceGroupProps = (category: RoomCategory) => ({
+  const faceProps = (category: RoomCategory) => ({
     className: 'room-perspective-face',
     role: 'button' as const,
     tabIndex: 0,
@@ -38,20 +41,16 @@ export function RoomPerspectiveNav({
   })
 
   return (
-    <svg viewBox="0 0 140 170" className="room-perspective-nav">
+    <svg viewBox="0 0 170 160" className="room-perspective-nav">
       <title>Välj yta</title>
-      {/* Öppet hörn (golv/vänstervägg/bakvägg/tak) istället för alla fyra väggar – vänstra
-         väggen och bakväggen räcker för att läsas som "ett rumshörn", och en högervägg gjorde
-         bara illustrationen rörigare utan att tillföra något. */}
-      <g {...faceGroupProps('tak')}>
-        <polygon points="8,8 132,8 132,55 45,55" fill={fill('tak')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+      <g {...faceProps('tak')}>
+        <rect x="52" y="14" width="100" height="46" rx={RADIUS} fill={fill('tak')} stroke={STROKE} strokeWidth="1.5" transform="rotate(-16 52 37)" />
       </g>
-      <g {...faceGroupProps('vagg')}>
-        <polygon points="8,8 45,55 45,115 8,162" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
-        <polygon points="45,55 132,55 132,115 45,115" fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+      <g {...faceProps('golv')}>
+        <rect x="52" y="100" width="100" height="46" rx={RADIUS} fill={fill('golv')} stroke={STROKE} strokeWidth="1.5" transform="rotate(16 52 123)" />
       </g>
-      <g {...faceGroupProps('golv')}>
-        <polygon points="8,162 132,162 132,115 45,115" fill={fill('golv')} stroke={STROKE} strokeWidth="1.5" strokeLinejoin="round" />
+      <g {...faceProps('vagg')}>
+        <rect x="10" y="54" width="24" height="52" rx={RADIUS} fill={fill('vagg')} stroke={STROKE} strokeWidth="1.5" />
       </g>
     </svg>
   )

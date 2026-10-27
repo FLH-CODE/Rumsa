@@ -458,15 +458,17 @@ textarea:focus-visible {
   right: calc(10px + var(--safe-right));
 }
 
-/* Egen rad under knapp-raden istället för trångt i mitten mellan dem – på en smal telefon fanns
-   annars inte plats för både bakåt-knappen, namnet och knappgruppen i samma rad utan att de
-   överlappade varandra. */
+/* I vänstra hörnet, på samma rad som ikongruppen (som ligger i det högra) – i stället för en
+   egen rad under, som tog onödig höjd från ritningen och kändes för lågt placerad. Smalare
+   maxbredd än tidigare så den aldrig riskerar att nå in i ikongruppen på en smal telefon. */
 .viewer-level-pill {
   position: absolute;
-  top: calc(10px + 44px + 3px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(80vw, 320px);
+  top: calc(10px + var(--safe-top));
+  left: calc(10px + var(--safe-left));
+  /* Ikongruppen till höger är nu 4 knappar bred (~200px) – räknar bort det (plus marginal) från
+     tillgänglig bredd istället för en ren vw-andel, annars överlappade pillen ikonerna på en
+     smal telefon. */
+  max-width: min(170px, calc(100vw - 250px - var(--safe-left) - var(--safe-right)));
   background: rgba(0, 0, 0, 0.55);
   border-radius: 999px;
   padding: 3px 14px;
@@ -726,6 +728,21 @@ textarea:focus-visible {
   max-width: 560px;
 }
 
+/* På telefon/smal skärm fyller rumskortet hela skärmen istället för att vara en botten-sheet med
+   ritningen synlig ovanför – mer arbetsyta, och känns mer som en egen vy än en popup. */
+@media (max-width: 640px) {
+  .inventory-sheet-backdrop {
+    padding: 0;
+  }
+
+  .inventory-sheet {
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
 /* Lite bredare på dator för att få plats med ikonral + innehåll + taggpalett sida vid sida –
    men inte bredare än så, annars blir det mest tomt vitt runt det numera ganska kompakta
    innehållet. */
@@ -862,25 +879,29 @@ textarea:focus-visible {
   gap: 14px;
 }
 
-/* Rumshörnet i perspektiv – golv/vägg/tak är själva de klickbara ytorna (se
-   RoomPerspectiveNav), inga knappar ovanpå. */
+/* Golv/vägg/tak är själva de klickbara ytorna (se RoomPerspectiveNav), inga knappar ovanpå. */
 .room-perspective-nav {
-  width: 140px;
+  width: 150px;
   height: auto;
+  overflow: visible;
 }
 
 .room-perspective-face {
   cursor: pointer;
   transition: fill 0.12s ease;
+  /* Webbläsarens defaultfokusram är en svart, fyrkantig box runt hela gruppens yta – matchar
+     inte alls den enskilda (roterade) ytans form och såg ut som en lös grafikbugg. Egen,
+     tunnare ram via :focus-visible nedan istället. */
+  outline: none;
 }
 
-.room-perspective-face:hover:not([aria-pressed='true']) polygon {
+.room-perspective-face:hover:not([aria-pressed='true']) rect {
   fill: rgba(22, 78, 99, 0.08);
 }
 
-.room-perspective-face:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+.room-perspective-face:focus-visible rect {
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
 }
 
 /* Platt lista – ett materialnamn + dess fritextrad i taget, ingen omgivande kort/ram per post,

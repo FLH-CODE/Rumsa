@@ -216,7 +216,7 @@ export function RoomInventorySheet({
   }
 
   return (
-    <div className="modal-backdrop" onClick={() => void handleClose()}>
+    <div className="modal-backdrop inventory-sheet-backdrop" onClick={() => void handleClose()}>
       <div className="modal-sheet inventory-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="inventory-sheet-header">
           <div className="inventory-sheet-title">
