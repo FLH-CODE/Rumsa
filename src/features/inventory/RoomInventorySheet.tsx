@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  closestCenter,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
@@ -25,12 +27,14 @@ import {
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord } from './defaultTemplate'
 import { RowTextInput } from './RowTextInput'
-import { CategoryIllustration } from './CategoryIllustration'
+import { RoomPerspectiveNav } from './RoomPerspectiveNav'
 import { tagLabel } from '../tags/tagLabel'
 import { colorForValue } from '../tags/colorForValue'
 import { deleteRoomCascade } from '../data/cascadeDelete'
 import { blurOnEnterEscape, confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { ROOM_TABS, CATEGORY_LABEL, CATEGORY_ICON, CATEGORY_HAS_ILLUSTRATION, isRoomCategory, type RoomTab } from './categories'
+import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
+
+type DropIndicator = { category: RoomCategory; index: number }
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -58,6 +62,7 @@ export function RoomInventorySheet({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<RoomTab>('funktion')
   const [activeDragTag, setActiveDragTag] = useState<MaterialTag | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
 
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
@@ -146,11 +151,16 @@ export function RoomInventorySheet({
   const setCategoryEntry = (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) =>
     setField('categories', (categories) => ({ ...categories, [category]: updater(categories[category]) }))
 
-  const addMaterial = (category: RoomCategory, tag: MaterialTag) =>
-    setCategoryEntry(category, (entry) => ({
-      ...entry,
-      materials: [...entry.materials, { id: createId(), tagId: tag.id, note: '' }],
-    }))
+  const insertMaterial = (category: RoomCategory, index: number, tag: MaterialTag) =>
+    setCategoryEntry(category, (entry) => {
+      const materials = [...entry.materials]
+      const clampedIndex = Math.max(0, Math.min(index, materials.length))
+      materials.splice(clampedIndex, 0, { id: createId(), tagId: tag.id, note: '' })
+      return { ...entry, materials }
+    })
+
+  const appendMaterial = (category: RoomCategory, tag: MaterialTag) =>
+    insertMaterial(category, loaded?.categories[category].materials.length ?? 0, tag)
 
   const updateMaterialNote = (category: RoomCategory, refId: string, note: string) =>
     setCategoryEntry(category, (entry) => ({
@@ -170,16 +180,39 @@ export function RoomInventorySheet({
     if (data?.type === 'tag') setActiveDragTag(data.tag as MaterialTag)
   }
 
+  // Visar exakt VAR taggen hamnar om man släpper nu (en tunn linje mellan två befintliga
+  // material) istället för att bara tona hela listan – annars var det otydligt om släppet skulle
+  // lägga till taggen sist, infogas någonstans mitt i, eller inget alls.
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || active.data.current?.type !== 'tag') {
+      setDropIndicator(null)
+      return
+    }
+    const overData = over.data.current as { type?: string; category?: RoomCategory; index?: number } | undefined
+    if (overData?.type === 'category' && overData.category) {
+      setDropIndicator({ category: overData.category, index: 0 })
+      return
+    }
+    if (overData?.type === 'slot' && overData.category && typeof overData.index === 'number') {
+      const draggedRect = active.rect.current.translated
+      const overRect = over.rect
+      const draggedCenterY = draggedRect ? draggedRect.top + draggedRect.height / 2 : overRect.top + overRect.height / 2
+      const overCenterY = overRect.top + overRect.height / 2
+      const insertIndex = draggedCenterY < overCenterY ? overData.index : overData.index + 1
+      setDropIndicator({ category: overData.category, index: insertIndex })
+      return
+    }
+    setDropIndicator(null)
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragTag(null)
-    const { active, over } = event
-    if (!over) return
-    const activeData = active.data.current
-    if (activeData?.type !== 'tag') return
-    const overData = over.data.current
-    if (overData?.type === 'category') {
-      addMaterial(overData.category as RoomCategory, activeData.tag as MaterialTag)
-    }
+    const indicator = dropIndicator
+    setDropIndicator(null)
+    const activeData = event.active.data.current
+    if (activeData?.type !== 'tag' || !indicator) return
+    insertMaterial(indicator.category, indicator.index, activeData.tag as MaterialTag)
   }
 
   return (
@@ -218,9 +251,22 @@ export function RoomInventorySheet({
         ) : loaded === null ? (
           <p className="field-hint">Laddar…</p>
         ) : (
-          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragTag(null)}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => {
+              setActiveDragTag(null)
+              setDropIndicator(null)
+            }}
+          >
             <div className="room-workspace">
-              <CategoryRail active={activeTab} onSelect={setActiveTab} />
+              <div className="room-nav-column">
+                <CategoryRail active={activeTab} onSelect={setActiveTab} />
+                <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={setActiveTab} />
+              </div>
 
               <div className="room-workspace-main">
                 {activeTab === 'funktion' ? (
@@ -253,6 +299,7 @@ export function RoomInventorySheet({
                     category={activeTab}
                     entry={loaded.categories[activeTab]}
                     projectId={projectId}
+                    dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
                     onRemoveMaterial={(ref, tag) => removeMaterial(activeTab, ref, tag)}
                     onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
                     onOvrigtChange={(value) => updateOvrigt(activeTab, value)}
@@ -260,7 +307,7 @@ export function RoomInventorySheet({
                 )}
               </div>
 
-              {isRoomCategory(activeTab) && <TagPalette projectId={projectId} category={activeTab} onPick={(tag) => addMaterial(activeTab, tag)} />}
+              {isRoomCategory(activeTab) && <TagPalette projectId={projectId} category={activeTab} onPick={(tag) => appendMaterial(activeTab, tag)} />}
             </div>
 
             <DragOverlay>
@@ -292,14 +339,14 @@ export function RoomInventorySheet({
   )
 }
 
-/** Vänsterikonraden som ersätter de gamla flikarna – klick byter "arbetsläge" (vilken kategoris
- * innehåll och taggpalett som visas). Den aktiva kategorin markeras med en mörk, grafisk yta
- * (grå/svart, inte en färg) istället för t.ex. appens vanliga primärfärg, så den tydligt läses
- * som ett eget litet kontrollsystem snarare än ännu en uppsättning vanliga knappar. */
-function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: RoomTab) => void }) {
+/** Enkel ikonrad för de tre kategorier som inte har en egen yta i perspektivillustrationen
+ * (Funktion, Utrustning, Övrigt) – Golv/Vägg/Tak väljs istället direkt i RoomPerspectiveNav. Den
+ * aktiva kategorin markeras med en mörk, grafisk yta (grå/svart, inte en färg) istället för t.ex.
+ * appens vanliga primärfärg, så den tydligt läses som ett eget litet kontrollsystem. */
+function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: RailTab) => void }) {
   return (
     <div className="category-rail">
-      {ROOM_TABS.map((tab) => {
+      {RAIL_TABS.map((tab) => {
         const Icon = CATEGORY_ICON[tab]
         return (
           <button
@@ -318,13 +365,15 @@ function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: R
   )
 }
 
-/** En kategoris hela innehåll: en dekorativ perspektivillustration (bara Golv/Vägg/Tak), en platt
- * lista materialtaggar (var och en med sin egen fritextrad) och ett samlat Övrigt-fält längst ner
- * – inga separata "rader" eller behållare per material. */
+/** En kategoris hela innehåll: en platt lista materialtaggar (var och en med sin egen fritextrad)
+ * och ett samlat Övrigt-fält längst ner – inga separata "rader" eller behållare per material. En
+ * tunn linje (se dropIndicatorIndex) visar exakt var en dragen tagg hamnar mellan befintliga
+ * material. */
 function CategoryContent({
   category,
   entry,
   projectId,
+  dropIndicatorIndex,
   onRemoveMaterial,
   onNoteChange,
   onOvrigtChange,
@@ -332,6 +381,7 @@ function CategoryContent({
   category: RoomCategory
   entry: CategoryEntry
   projectId: string
+  dropIndicatorIndex: number | null
   onRemoveMaterial: (ref: MaterialReference, tag: MaterialTag | undefined) => void
   onNoteChange: (refId: string, note: string) => void
   onOvrigtChange: (value: string) => void
@@ -341,38 +391,29 @@ function CategoryContent({
     [projectId, category],
   )
   const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
-  const { setNodeRef, isOver } = useDroppable({ id: `category-${category}`, data: { type: 'category', category } })
+  const { setNodeRef } = useDroppable({ id: `category-${category}`, data: { type: 'category', category } })
 
   return (
     <div className="category-column">
-      {CATEGORY_HAS_ILLUSTRATION[category] && <CategoryIllustration category={category} />}
-      <div ref={setNodeRef} className={`material-flat-list${isOver ? ' drop-target' : ''}`}>
+      <div ref={setNodeRef} className="material-flat-list">
         {entry.materials.length === 0 && (
           <p className="field-hint category-empty">Tryck eller dra en tagg hit från listan till höger.</p>
         )}
-        {entry.materials.map((ref) => (
-          <div key={ref.id} className="material-entry">
-            <div className="material-entry-head">
-              <span className="material-color-dot" style={{ background: colorForValue(tagById.get(ref.tagId)?.code ?? '') }} />
-              <strong>{tagLabel(tagById.get(ref.tagId))}</strong>
-              <button
-                type="button"
-                className="material-entry-remove"
-                onClick={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
-                aria-label={`Ta bort ${tagLabel(tagById.get(ref.tagId))}`}
-              >
-                ✕
-              </button>
-            </div>
-            <RowTextInput
+        {entry.materials.map((ref, index) => (
+          <Fragment key={ref.id}>
+            {dropIndicatorIndex === index && <div className="insert-indicator" />}
+            <MaterialEntry
+              index={index}
+              category={category}
+              reference={ref}
+              tag={tagById.get(ref.tagId)}
               projectId={projectId}
-              source="materialNote"
-              value={ref.note}
-              onChange={(value) => onNoteChange(ref.id, value)}
-              placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
+              onRemove={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
+              onNoteChange={(value) => onNoteChange(ref.id, value)}
             />
-          </div>
+          </Fragment>
         ))}
+        {dropIndicatorIndex === entry.materials.length && entry.materials.length > 0 && <div className="insert-indicator" />}
       </div>
       <div className="field">
         <label htmlFor={`ovrigt-${category}`}>Övrigt</label>
@@ -385,6 +426,47 @@ function CategoryContent({
           placeholder="t.ex. Anmärkning om skicket"
         />
       </div>
+    </div>
+  )
+}
+
+/** Ett enskilt material i listan – också en egen droppzon (se handleDragOver i
+ * RoomInventorySheet), så en dragen tagg kan släppas precis före eller efter just den här posten
+ * istället för att bara hamna sist i listan. */
+function MaterialEntry({
+  index,
+  category,
+  reference,
+  tag,
+  projectId,
+  onRemove,
+  onNoteChange,
+}: {
+  index: number
+  category: RoomCategory
+  reference: MaterialReference
+  tag: MaterialTag | undefined
+  projectId: string
+  onRemove: () => void
+  onNoteChange: (value: string) => void
+}) {
+  const { setNodeRef } = useDroppable({ id: `slot-${category}-${reference.id}`, data: { type: 'slot', category, index } })
+  return (
+    <div ref={setNodeRef} className="material-entry">
+      <div className="material-entry-head">
+        <span className="material-color-dot" style={{ background: colorForValue(tag?.code ?? '') }} />
+        <strong>{tagLabel(tag)}</strong>
+        <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
+          ✕
+        </button>
+      </div>
+      <RowTextInput
+        projectId={projectId}
+        source="materialNote"
+        value={reference.note}
+        onChange={onNoteChange}
+        placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
+      />
     </div>
   )
 }

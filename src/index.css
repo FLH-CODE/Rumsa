@@ -808,12 +808,18 @@ textarea:focus-visible {
   min-width: 0;
 }
 
-.category-rail {
+.room-nav-column {
   position: sticky;
   top: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+.category-rail {
+  display: flex;
+  flex-direction: row;
   gap: 4px;
   background: #ffffff;
   border: 1px solid #e4e4e7;
@@ -848,10 +854,25 @@ textarea:focus-visible {
   gap: 14px;
 }
 
-.category-illustration {
-  width: 100%;
-  max-width: 280px;
+/* Rumshörnet i perspektiv – golv/vägg/tak är själva de klickbara ytorna (se
+   RoomPerspectiveNav), inga knappar ovanpå. */
+.room-perspective-nav {
+  width: 140px;
   height: auto;
+}
+
+.room-perspective-face {
+  cursor: pointer;
+  transition: fill 0.12s ease;
+}
+
+.room-perspective-face:hover:not([aria-pressed='true']) polygon {
+  fill: rgba(22, 78, 99, 0.08);
+}
+
+.room-perspective-face:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Platt lista – ett materialnamn + dess fritextrad i taget, ingen omgivande kort/ram per post,
@@ -861,8 +882,6 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 14px;
   min-height: 40px;
-  border-radius: var(--radius-md);
-  transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .category-empty {
@@ -871,11 +890,13 @@ textarea:focus-visible {
   padding: 8px 0;
 }
 
-/* Visar tydligt att kategorins yta är "över" vid en dragning – annars var det otydligt om man
-   faktiskt skulle träffa den om man släppte nu. */
-.drop-target {
-  background: rgba(22, 78, 99, 0.08);
-  box-shadow: 0 0 0 2px var(--color-primary) inset;
+/* En tunn linje som visar exakt var en dragen tagg hamnar (mellan två befintliga material)
+   istället för att bara tona hela listan – se dropIndicatorIndex i RoomInventorySheet. */
+.insert-indicator {
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 2px;
+  margin: -6px 0;
 }
 
 .material-entry {
@@ -975,6 +996,10 @@ textarea:focus-visible {
   .category-rail-btn {
     width: 34px;
     height: 34px;
+  }
+
+  .room-perspective-nav {
+    width: 108px;
   }
 
   .tag-palette {
@@ -1316,8 +1341,8 @@ textarea:focus-visible {
 
 .primary-action-icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
   display: flex;

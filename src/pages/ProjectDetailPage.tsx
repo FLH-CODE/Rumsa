@@ -189,7 +189,7 @@ export default function ProjectDetailPage() {
           }
         >
           <div className="primary-action-icon">
-            <FloorPlanIcon width={28} height={28} />
+            <FloorPlanIcon width={44} height={44} />
           </div>
           <div className="primary-action-text">
             <strong>{firstPage ? 'Öppna ritningsvisare' : 'Ladda upp en ritning för att börja'}</strong>

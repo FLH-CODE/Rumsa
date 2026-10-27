@@ -32,41 +32,14 @@ export function DrawingIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Förenklad 2D-planritning – flera rum avdelade av väggar plus en dörrsvep, så den läses
+ * entydigt som "en planritning" även i stort format på startskärmen. */
 export function FloorPlanIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
-      <rect x="3" y="4" width="18" height="16" rx="1" />
-      <path d="M3 13h6v7" />
-      <path d="M13 4v6h8" />
-      <path d="M9 13a3 3 0 0 0 3-3" />
-    </svg>
-  )
-}
-
-export function FloorIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
       <rect x="3" y="3" width="18" height="18" rx="1" />
-      <path d="M3 12h18M12 3v18" />
-    </svg>
-  )
-}
-
-export function WallIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <rect x="4" y="4" width="16" height="16" rx="1" />
-      <path d="M4 9.3h16M4 14.7h16M12 4v5.3M8 9.3v5.4M16 9.3v5.4M12 14.7V20" />
-    </svg>
-  )
-}
-
-export function CeilingIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <rect x="3" y="3" width="18" height="18" rx="1" />
-      <circle cx="12" cy="9" r="2" />
-      <path d="M12 11v5" />
+      <path d="M3 13h8M11 3v9M11 15v6M16 13v8" />
+      <path d="M8 13a3 3 0 0 0 3-3" />
     </svg>
   )
 }
