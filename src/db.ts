@@ -123,6 +123,18 @@ export interface MaterialTag {
 }
 
 /**
+ * Ett foto taget med kameran (eller valt ur galleriet) och knutet till ett specifikt rum – fysisk
+ * dokumentation av det faktiska rummet, oberoende av om rummet är kopplat till ett typrum (ett
+ * typrums data är en mall, men fotot visar hur just DET HÄR rummet faktiskt ser ut).
+ */
+export interface RoomPhoto {
+  id: string
+  roomId: string
+  blob: Blob
+  createdAt: number
+}
+
+/**
  * Ett typrum – en förinställd uppsättning rumsinfo (samma fält som ett rums InventoryRecord) som
  * valfritt antal rum kan kopplas till istället för att fylla i samma information om och om igen
  * (t.ex. en standard-WC eller ett standardkontor som förekommer på många ställen i projektet). Ett
@@ -150,6 +162,7 @@ class RumsaDB extends Dexie {
   inventoryTemplates!: EntityTable<InventoryTemplate, 'id'>
   materialTags!: EntityTable<MaterialTag, 'id'>
   roomTypes!: EntityTable<RoomType, 'id'>
+  roomPhotos!: EntityTable<RoomPhoto, 'id'>
 
   constructor() {
     super('rumsa')
@@ -411,6 +424,12 @@ class RumsaDB extends Dexie {
     this.drawingPages.hook('reading', (page: DrawingPage) =>
       typeof page.order === 'number' ? page : { ...page, order: page.pageIndex },
     )
+
+    // v10: foton knutna till ett rum (kameran/galleriet), oberoende av om rummet är kopplat till
+    // ett typrum – se RoomPhoto.
+    this.version(10).stores({
+      roomPhotos: 'id, roomId, createdAt',
+    })
 
     // Normaliserar varje läst post så att `categories` alltid har alla fem fasta kategorier med
     // giltiga fält, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post

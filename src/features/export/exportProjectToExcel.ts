@@ -1,9 +1,34 @@
 import * as XLSX from 'xlsx'
-import { db, ROOM_CATEGORIES, type CategoryEntry, type Project } from '../../db'
+import JSZip from 'jszip'
+import { db, ROOM_CATEGORIES, type CategoryEntry, type Project, type Room, type RoomPhoto } from '../../db'
 import { CATEGORY_LABEL } from '../inventory/categories'
 
-const HEADER = ['Nivå', 'Rum', 'Rumsnamn', 'Antal personer', 'Funktionsbeskrivning', 'Dagsljus', 'Storlek', 'Kategori', 'Material', 'Övrigt']
+const HEADER = [
+  'Nivå',
+  'Rum',
+  'Rumsnamn',
+  'Antal personer',
+  'Funktionsbeskrivning',
+  'Dagsljus',
+  'Storlek',
+  'Kategori',
+  'Material',
+  'Övrigt',
+  'Bilder',
+]
 const LEGEND_HEADER = ['Kategori', 'Kod', 'Beskrivning']
+
+/** Ett filsystemsäkert namn för rummets bildmapp i zip-exporten, t.ex. "1015 SLUSS". */
+function roomFolderName(room: Room): string {
+  const label = `${room.roomNumber}${room.roomName ? ` ${room.roomName}` : ''}`.replace(/[\\/:*?"<>|]/g, '').trim()
+  return label || room.id
+}
+
+function photoExtension(blob: Blob): string {
+  if (blob.type === 'image/png') return 'png'
+  if (blob.type === 'image/webp') return 'webp'
+  return 'jpg'
+}
 
 /**
  * Exporterar all inventeringsdata i projektet till en Excel-fil – en rad per kategori med
@@ -27,6 +52,14 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     .anyOf(rooms.map((r) => r.id))
     .toArray()
   const recordByRoomId = new Map(records.map((r) => [r.roomId, r]))
+
+  const photos = await db.roomPhotos.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
+  const photosByRoomId = new Map<string, RoomPhoto[]>()
+  for (const photo of photos) {
+    const list = photosByRoomId.get(photo.roomId)
+    if (list) list.push(photo)
+    else photosByRoomId.set(photo.roomId, [photo])
+  }
 
   // Ett rum kopplat till ett typrum exporterar typrummets data (vad kortet faktiskt visar),
   // inte rummets egen – ofyllda eller matchande – bakgrundspost.
@@ -64,6 +97,10 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   for (const room of sortedRooms) {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
     const record = effectiveDataForRoom(room)
+    const roomPhotoCount = photosByRoomId.get(room.id)?.length ?? 0
+    // Hänvisar till zip-exportens mapp (se roomFolderName) istället för att försöka bädda in
+    // bilderna i själva kalkylarket – xlsx-biblioteket som används saknar stöd för det.
+    const photoLabel = roomPhotoCount > 0 ? `${roomPhotoCount} st (Bilder/${roomFolderName(room)})` : ''
 
     const categoriesWithContent = record
       ? ROOM_CATEGORIES.filter((c) => record.categories[c].materials.length > 0 || record.categories[c].ovrigt.trim())
@@ -81,6 +118,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
         '',
         '',
         '',
+        photoLabel,
       ])
     } else {
       for (const category of categoriesWithContent) {
@@ -96,6 +134,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
           CATEGORY_LABEL[category],
           formatMaterials(entry),
           entry.ovrigt,
+          photoLabel,
         ])
       }
     }
@@ -115,6 +154,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     { wch: 12 },
     { wch: 40 },
     { wch: 40 },
+    { wch: 30 },
   ]
   XLSX.utils.book_append_sheet(workbook, sheet, 'Inventering')
 
@@ -133,5 +173,32 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
 
   const dateStamp = new Date().toISOString().slice(0, 10)
   const safeName = project.name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Rumsa'
-  XLSX.writeFile(workbook, `${safeName} – inventering ${dateStamp}.xlsx`)
+  const xlsxFileName = `${safeName} – inventering ${dateStamp}.xlsx`
+
+  if (photos.length === 0) {
+    XLSX.writeFile(workbook, xlsxFileName)
+    return
+  }
+
+  // Finns det bilder exporteras allt tillsammans som en zip (kalkylarket + en bildmapp per rum) –
+  // xlsx-biblioteket kan inte bädda in bilderna i själva arket, så en separat nedladdning per bild
+  // (eller att bara tappa bort dem helt) hade varit mycket sämre.
+  const zip = new JSZip()
+  const xlsxContent = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+  zip.file(xlsxFileName, xlsxContent)
+  for (const room of sortedRooms) {
+    const roomPhotos = photosByRoomId.get(room.id)
+    if (!roomPhotos || roomPhotos.length === 0) continue
+    const folder = `Bilder/${roomFolderName(room)}`
+    roomPhotos.forEach((photo, index) => {
+      zip.file(`${folder}/bild-${index + 1}.${photoExtension(photo.blob)}`, photo.blob)
+    })
+  }
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  const url = URL.createObjectURL(zipBlob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${safeName} – inventering ${dateStamp}.zip`
+  link.click()
+  URL.revokeObjectURL(url)
 }

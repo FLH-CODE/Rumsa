@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -13,13 +13,14 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory } from '../../db'
+import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory, type RoomPhoto } from '../../db'
 import { RowTextInput } from './RowTextInput'
 import { RoomPerspectiveNav } from './RoomPerspectiveNav'
 import { tagLabel } from '../tags/tagLabel'
 import { tagChipStyle } from '../tags/colorForValue'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { confirmOnEnterEscape, blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
+import { CameraIcon } from '../../components/icons'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
 
 type DropIndicator = { category: RoomCategory; index: number }
@@ -40,6 +41,7 @@ export type FunktionFields = {
  */
 export function InventoryWorkspace({
   projectId,
+  roomId,
   categories,
   setCategoryEntry,
   funktion,
@@ -48,6 +50,9 @@ export function InventoryWorkspace({
   onTagCreated,
 }: {
   projectId: string
+  /** Rummets id – styr om fliken "Bilder" visas alls. Finns bara för ett riktigt rum (inte när
+   * arbetsytan används för att redigera ett typrum, som inte har några egna foton). */
+  roomId?: string
   categories: Record<RoomCategory, CategoryEntry>
   setCategoryEntry: (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) => void
   funktion: FunktionFields
@@ -58,6 +63,9 @@ export function InventoryWorkspace({
   onTagCreated?: (tagId: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<RoomTab>('funktion')
+  // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
+  // när arbetsytan faktiskt hör till ett riktigt rum.
+  const railTabs = roomId ? RAIL_TABS : RAIL_TABS.filter((tab) => tab !== 'bilder')
   const [activeDragTag, setActiveDragTag] = useState<MaterialTag | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
   // Styrs här (inte lokalt i TagPalette) så att innehållet till vänster om det vertikala
@@ -152,7 +160,7 @@ export function InventoryWorkspace({
       <div className="room-workspace">
         <div className="room-nav-row">
           <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} />
-          <CategoryRail active={activeTab} onSelect={selectTab} />
+          <CategoryRail tabs={railTabs} active={activeTab} onSelect={selectTab} />
         </div>
 
         <div className={`room-workspace-body${creatingTag ? ' palette-expanded' : ''}`}>
@@ -218,6 +226,8 @@ export function InventoryWorkspace({
                   </div>
                 </div>
               )
+            ) : activeTab === 'bilder' ? (
+              roomId && <PhotoGallery roomId={roomId} />
             ) : (
               <CategoryContent
                 key={activeTab}
@@ -275,10 +285,18 @@ function FieldValue({ label, value }: { label: string; value: string }) {
  * inte har en egen yta där (Funktion, Utrustning, Övrigt) – Golv/Vägg/Tak väljs istället direkt i
  * RoomPerspectiveNav. Samma streck och färg (se index.css) som RoomPerspectiveNav använder för sina
  * ytor, så ikonralen läses som en fortsättning av samma kontrollsystem istället för ett separat. */
-function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: RailTab) => void }) {
+function CategoryRail({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: RailTab[]
+  active: RoomTab
+  onSelect: (tab: RailTab) => void
+}) {
   return (
     <div className="category-rail">
-      {RAIL_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const Icon = CATEGORY_ICON[tab]
         return (
           <button
@@ -368,6 +386,66 @@ function CategoryContent({
           />
         </div>
       )}
+    </div>
+  )
+}
+
+/** Foton knutna till rummet – tagna direkt med kameran (på mobil, via `capture`) eller valda ur
+ * galleriet. Oberoende av `readOnly`: ett foto visar det faktiska rummet och ska gå att lägga
+ * till/ta bort även när rummet är kopplat till ett typrum (vars data annars är skrivskyddad). */
+function PhotoGallery({ roomId }: { roomId: string }) {
+  const photos = useLiveQuery(() => db.roomPhotos.where('roomId').equals(roomId).sortBy('createdAt'), [roomId])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    await db.roomPhotos.bulkAdd(
+      Array.from(files).map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })),
+    )
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDelete = async (photoId: string) => {
+    if (!(await confirmDialog('Ta bort bilden?', { danger: true }))) return
+    await db.roomPhotos.delete(photoId)
+  }
+
+  return (
+    <div className="photo-gallery">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => void handleFilesSelected(e.target.files)}
+      />
+      <button type="button" className="btn btn-secondary photo-add-btn" onClick={() => fileInputRef.current?.click()}>
+        <CameraIcon width={18} height={18} /> Ta bild
+      </button>
+      {photos === undefined ? null : photos.length === 0 ? (
+        <p className="field-hint category-empty">Inga bilder ännu.</p>
+      ) : (
+        <div className="photo-grid">
+          {photos.map((photo) => (
+            <PhotoThumb key={photo.id} photo={photo} onDelete={() => void handleDelete(photo.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PhotoThumb({ photo, onDelete }: { photo: RoomPhoto; onDelete: () => void }) {
+  const url = useMemo(() => URL.createObjectURL(photo.blob), [photo.blob])
+  useEffect(() => () => URL.revokeObjectURL(url), [url])
+  return (
+    <div className="photo-thumb">
+      <img src={url} alt="" />
+      <button type="button" className="material-entry-remove photo-thumb-remove" onClick={onDelete} aria-label="Ta bort bild">
+        ✕
+      </button>
     </div>
   )
 }

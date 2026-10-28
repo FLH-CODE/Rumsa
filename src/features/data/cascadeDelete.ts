@@ -8,16 +8,19 @@ import { db, type InventoryRecord, type RoomType } from '../../db'
 export async function deleteProjectCascade(projectId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialTags],
+    [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialTags, db.roomTypes, db.roomPhotos],
     async () => {
       const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
-      await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).delete()
+      const roomIds = rooms.map((r) => r.id)
+      await db.inventoryRecords.where('roomId').anyOf(roomIds).delete()
+      await db.roomPhotos.where('roomId').anyOf(roomIds).delete()
       await Promise.all([
         db.rooms.where('projectId').equals(projectId).delete(),
         db.drawingPages.where('projectId').equals(projectId).delete(),
         db.drawings.where('projectId').equals(projectId).delete(),
         db.levels.where('projectId').equals(projectId).delete(),
         db.materialTags.where('projectId').equals(projectId).delete(),
+        db.roomTypes.where('projectId').equals(projectId).delete(),
       ])
       await db.projects.delete(projectId)
     },
@@ -29,21 +32,24 @@ export async function deleteProjectCascade(projectId: string): Promise<void> {
  * upptäckts på just de sidorna, inklusive deras inventering.
  */
 export async function deleteDrawingCascade(drawingId: string): Promise<void> {
-  await db.transaction('rw', [db.drawings, db.drawingPages, db.rooms, db.inventoryRecords], async () => {
+  await db.transaction('rw', [db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.roomPhotos], async () => {
     const pages = await db.drawingPages.where('drawingId').equals(drawingId).toArray()
     const pageIds = pages.map((p) => p.id)
     const rooms = await db.rooms.where('drawingPageId').anyOf(pageIds).toArray()
-    await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).delete()
+    const roomIds = rooms.map((r) => r.id)
+    await db.inventoryRecords.where('roomId').anyOf(roomIds).delete()
+    await db.roomPhotos.where('roomId').anyOf(roomIds).delete()
     await db.rooms.where('drawingPageId').anyOf(pageIds).delete()
     await db.drawingPages.where('drawingId').equals(drawingId).delete()
     await db.drawings.delete(drawingId)
   })
 }
 
-/** Tar bort ett enskilt rum (t.ex. feldetekterat) och dess ev. inventering. */
+/** Tar bort ett enskilt rum (t.ex. feldetekterat) och dess ev. inventering och foton. */
 export async function deleteRoomCascade(roomId: string): Promise<void> {
-  await db.transaction('rw', [db.rooms, db.inventoryRecords], async () => {
+  await db.transaction('rw', [db.rooms, db.inventoryRecords, db.roomPhotos], async () => {
     await db.inventoryRecords.where('roomId').equals(roomId).delete()
+    await db.roomPhotos.where('roomId').equals(roomId).delete()
     await db.rooms.delete(roomId)
   })
 }

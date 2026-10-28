@@ -162,6 +162,10 @@ export default function ProjectDetailPage() {
   }
 
   const roomCount = rooms?.length ?? 0
+  // Att byta format efter att ritningar laddats upp (och därmed redan rumstaggade via det gamla
+  // formatet) skulle göra att redan taggade rum inte längre matchas vid nästa omdetektering –
+  // se handlePatternChange/syncRoomsForPage – och i praktiken förstöra allt ifyllt arbete.
+  const hasUploadedDrawings = (drawings?.length ?? 0) > 0
   const currentPatternLabel =
     ROOM_NUMBER_PRESETS.find((p) => p.value === project.roomNumberPattern)?.shortLabel ?? 'Anpassat'
 
@@ -303,7 +307,7 @@ export default function ProjectDetailPage() {
               <select
                 id="room-pattern"
                 value={project.roomNumberPattern}
-                disabled={redetecting}
+                disabled={redetecting || hasUploadedDrawings}
                 onChange={(e) => void handlePatternChange(e.target.value)}
               >
                 {ROOM_NUMBER_PRESETS.map((p) => (
@@ -315,7 +319,9 @@ export default function ProjectDetailPage() {
               <span className="field-hint">
                 {redetecting
                   ? 'Söker igenom uppladdade ritningar efter det nya formatet…'
-                  : 'Styr hur appen känner igen rumsnummer. Uppdaterar automatiskt alla uppladdade ritningar vid ändring.'}
+                  : hasUploadedDrawings
+                    ? 'Går inte att ändra efter att ritningar laddats upp – ett annat format skulle göra att redan taggade rum inte längre känns igen och förstöra det ifyllda arbetet.'
+                    : 'Styr hur appen känner igen rumsnummer. Uppdaterar automatiskt alla uppladdade ritningar vid ändring.'}
               </span>
             </div>
           </section>

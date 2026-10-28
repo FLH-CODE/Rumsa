@@ -192,6 +192,15 @@ export function BackIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function CameraIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+      <circle cx="12" cy="12.5" r="3.2" />
+    </svg>
+  )
+}
+
 export function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

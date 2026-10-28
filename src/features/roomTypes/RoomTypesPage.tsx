@@ -192,19 +192,21 @@ function RoomTypeEditSheet({
           </div>
         </div>
 
-        <InventoryWorkspace
-          projectId={projectId}
-          categories={categories}
-          setCategoryEntry={setCategoryEntry}
-          funktion={{ antalPersoner, funktionsbeskrivning, dagsljus, storlek }}
-          setFunktionField={(key, value) => {
-            if (key === 'antalPersoner') setAntalPersoner(value)
-            else if (key === 'funktionsbeskrivning') setFunktionsbeskrivning(value)
-            else if (key === 'dagsljus') setDagsljus(value)
-            else setStorlek(value)
-          }}
-          onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
-        />
+        <div className="inventory-sheet-content">
+          <InventoryWorkspace
+            projectId={projectId}
+            categories={categories}
+            setCategoryEntry={setCategoryEntry}
+            funktion={{ antalPersoner, funktionsbeskrivning, dagsljus, storlek }}
+            setFunktionField={(key, value) => {
+              if (key === 'antalPersoner') setAntalPersoner(value)
+              else if (key === 'funktionsbeskrivning') setFunktionsbeskrivning(value)
+              else if (key === 'dagsljus') setDagsljus(value)
+              else setStorlek(value)
+            }}
+            onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
+          />
+        </div>
 
         <div className="modal-actions inventory-sheet-footer">
           <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDelete()}>

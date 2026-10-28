@@ -5,6 +5,13 @@ export interface ElementSize {
   height: number
 }
 
+/** Hur länge storleken måste stå still innan den rapporteras vidare (utom den allra första
+ * mätningen, som alltid rapporteras direkt). En skärmrotation på iPad genererar en hel störtflod
+ * av ResizeObserver-tick medan adressfält/säkra ytor hinner i kapp – utan debounce triggade var och
+ * en av dem en ny, tung PDF-rendering (se PdfPageCanvas) rakt i följd, vilket kunde få Safari att
+ * hänga sig eller krascha fliken. */
+const DEBOUNCE_MS = 200
+
 /**
  * Mäter en elements innehållsstorlek reaktivt, t.ex. för att anpassa en PDF-sida efter
  * tillgängligt utrymme. Använder en callback-ref (inte useRef) eftersom elementet kan monteras
@@ -18,14 +25,25 @@ export function useElementSize<T extends HTMLElement>() {
   useEffect(() => {
     if (!node) return
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (!entry) return
       const { width, height } = entry.contentRect
-      setSize({ width, height })
+      if (timeoutId !== null) clearTimeout(timeoutId)
+      // Första mätningen (inget värde ännu) sätts direkt, annars dröjer den första renderingen
+      // efter sidbyte/montering i onödan.
+      setSize((prev) => {
+        if (prev === null) return { width, height }
+        timeoutId = setTimeout(() => setSize({ width, height }), DEBOUNCE_MS)
+        return prev
+      })
     })
     observer.observe(node)
-    return () => observer.disconnect()
+    return () => {
+      if (timeoutId !== null) clearTimeout(timeoutId)
+      observer.disconnect()
+    }
   }, [node])
 
   return [setNode, size] as const

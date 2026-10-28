@@ -286,30 +286,36 @@ export function RoomInventorySheet({
         )}
 
         {/* Dold medan menyn är öppen – att visa både menyns "ärver all data från X" och hela den
-           ärvda arbetsytan samtidigt kändes rörigt och redundant. */}
-        {!showTypeMenu &&
-          (loadError ? (
-            <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
-              {loadError}
-            </p>
-          ) : effective === null ? (
-            <p className="field-hint">Laddar…</p>
-          ) : (
-            <InventoryWorkspace
-              projectId={projectId}
-              categories={effective.categories}
-              setCategoryEntry={setCategoryEntry}
-              funktion={{
-                antalPersoner: effective.antalPersoner,
-                funktionsbeskrivning: effective.funktionsbeskrivning,
-                dagsljus: effective.dagsljus,
-                storlek: effective.storlek,
-              }}
-              setFunktionField={(key, value) => setField(key, value)}
-              readOnly={Boolean(linkedType)}
-              onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
-            />
-          ))}
+           ärvda arbetsytan samtidigt kändes rörigt och redundant. flex:1 fyller ut resten av det
+           (fasta, se .inventory-sheet) höjdutrymmet så att footern alltid hamnar på exakt samma
+           plats längst ner, oavsett hur mycket innehåll det aktiva arbetsläget råkar ha. */}
+        {!showTypeMenu && (
+          <div className="inventory-sheet-content">
+            {loadError ? (
+              <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
+                {loadError}
+              </p>
+            ) : effective === null ? (
+              <p className="field-hint">Laddar…</p>
+            ) : (
+              <InventoryWorkspace
+                projectId={projectId}
+                roomId={room.id}
+                categories={effective.categories}
+                setCategoryEntry={setCategoryEntry}
+                funktion={{
+                  antalPersoner: effective.antalPersoner,
+                  funktionsbeskrivning: effective.funktionsbeskrivning,
+                  dagsljus: effective.dagsljus,
+                  storlek: effective.storlek,
+                }}
+                setFunktionField={(key, value) => setField(key, value)}
+                readOnly={Boolean(linkedType)}
+                onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
+              />
+            )}
+          </div>
+        )}
 
         {!showTypeMenu && (
           <div className="modal-actions inventory-sheet-footer">
