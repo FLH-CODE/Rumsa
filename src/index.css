@@ -828,17 +828,23 @@ textarea:focus-visible {
 
 .room-workspace-body {
   display: flex;
-  align-items: flex-start;
+  /* stretch (default) istället för flex-start – annars sträckte sig inte taggpalettens
+     avskiljande kantlinje (.tag-palette) ner lika långt som den högre innehållskolumnen bredvid,
+     och täckte t.ex. inte Övrigt-fältets höjd. */
+  align-items: stretch;
   gap: 16px;
   /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
      osynligt istället för att bara krävas lite horisontell scroll för att nå. */
   overflow-x: auto;
 }
 
+/* Ligger till höger om perspektivillustrationen, på en egen rad – inte en vertikal stapel – för
+   de tre kategorier som inte har en egen yta i illustrationen. */
 .category-rail {
   flex-shrink: 0;
+  align-self: flex-start;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 4px;
   background: #ffffff;
   border: 1px solid #e4e4e7;
@@ -888,8 +894,8 @@ textarea:focus-visible {
 }
 
 /* Golv/vägg/tak är själva de klickbara ytorna (se RoomPerspectiveNav), inga knappar ovanpå.
-   Höjden sätts explicit (inte bredden) så den alltid linjerar exakt med ikonradens höjd bredvid
-   – bredden följer sedan med automatiskt via SVG:ns eget höjd/bredd-förhållande. */
+   Höjden sätts explicit (inte bredden) – bredden följer med automatiskt via SVG:ns eget
+   höjd/bredd-förhållande (viewBox är kvadratiskt, så den blir ungefär lika bred som hög). */
 .room-perspective-nav {
   height: 140px;
   width: auto;
@@ -1002,6 +1008,19 @@ textarea:focus-visible {
   gap: 10px;
   border-left: 1px solid var(--color-border);
   padding-left: 16px;
+  transition: width 0.18s ease;
+}
+
+/* Medan man skapar en ny tagg: paletten breddas ordentligt så Kod/Beskrivning-fälten får gott om
+   plats, och innehållet till vänster om strecket tonas ner (se .room-workspace-main[inert]) så
+   att den bredare paletten känns avsiktlig, inte som att den bara trängt undan resten. */
+.tag-palette.expanded {
+  width: 280px;
+}
+
+.room-workspace-main[inert] {
+  opacity: 0.35;
+  transition: opacity 0.18s ease;
 }
 
 .tag-palette-list {
@@ -1013,17 +1032,19 @@ textarea:focus-visible {
 }
 
 /* "+ Skapa ny tagg"-formuläret är byggt för bredare sammanhang (två knappar sida vid sida) – i
-   den smala paletten fick det annars knapparna (och ibland fälten) att svämma över kortets
-   högerkant. Stack:ar om till en smal, fullbredd variant istället. */
-.tag-palette .tag-quick-add {
+   den smala (ej expanderade) paletten fick det annars knapparna (och ibland fälten) att svämma
+   över kortets högerkant. Stack:ar om till en smal, fullbredd variant istället. När paletten är
+   expanderad (.expanded, se ovan) finns gott om plats, så då behålls den vanliga sida-vid-sida
+   layouten. */
+.tag-palette:not(.expanded) .tag-quick-add {
   padding: 8px;
 }
 
-.tag-palette .tag-quick-add-actions {
+.tag-palette:not(.expanded) .tag-quick-add-actions {
   flex-direction: column;
 }
 
-.tag-palette .tag-quick-add-actions .btn {
+.tag-palette:not(.expanded) .tag-quick-add-actions .btn {
   width: 100%;
   min-height: 38px;
   padding: 8px 10px;
@@ -1081,6 +1102,11 @@ textarea:focus-visible {
   .tag-palette {
     width: 112px;
     padding-left: 10px;
+  }
+
+  .tag-palette.expanded {
+    width: 220px;
+    padding-left: 16px;
   }
 }
 

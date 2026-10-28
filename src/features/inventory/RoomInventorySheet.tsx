@@ -65,6 +65,10 @@ export function RoomInventorySheet({
   const [activeTab, setActiveTab] = useState<RoomTab>('funktion')
   const [activeDragTag, setActiveDragTag] = useState<MaterialTag | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
+  // Styrs här (inte lokalt i TagPalette) så att innehållet till vänster om det vertikala
+  // strecket kan tonas ner medan man skapar en ny tagg – annars fick textfälten (Kod/
+  // Beskrivning) för lite plats i den normalt smala paletten.
+  const [creatingTag, setCreatingTag] = useState(false)
 
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
@@ -181,6 +185,13 @@ export function RoomInventorySheet({
 
   const updateOvrigt = (category: RoomCategory, value: string) => setCategoryEntry(category, (entry) => ({ ...entry, ovrigt: value }))
 
+  // Byte av arbetsläge avbryter alltid en pågående "skapa ny tagg" – annars kunde formuläret
+  // (och den expanderade/tonade layouten) hänga kvar för fel kategori.
+  const selectTab = (tab: RoomTab) => {
+    setCreatingTag(false)
+    setActiveTab(tab)
+  }
+
   const handleDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current
     if (data?.type === 'tag') setActiveDragTag(data.tag as MaterialTag)
@@ -270,12 +281,12 @@ export function RoomInventorySheet({
           >
             <div className="room-workspace">
               <div className="room-nav-row">
-                <CategoryRail active={activeTab} onSelect={setActiveTab} />
-                <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={setActiveTab} />
+                <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} />
+                <CategoryRail active={activeTab} onSelect={selectTab} />
               </div>
 
-              <div className="room-workspace-body">
-                <div className="room-workspace-main">
+              <div className={`room-workspace-body${creatingTag ? ' palette-expanded' : ''}`}>
+                <div className="room-workspace-main" inert={creatingTag}>
                   <h2 className="active-category-label">{CATEGORY_LABEL[activeTab]}</h2>
                   {activeTab === 'funktion' ? (
                     <div className="inventory-rows">
@@ -339,7 +350,14 @@ export function RoomInventorySheet({
                 </div>
 
                 {isRoomCategory(activeTab) && (
-                  <TagPalette key={activeTab} projectId={projectId} category={activeTab} onPick={(tag) => appendMaterial(activeTab, tag)} />
+                  <TagPalette
+                    key={activeTab}
+                    projectId={projectId}
+                    category={activeTab}
+                    creating={creatingTag}
+                    onCreatingChange={setCreatingTag}
+                    onPick={(tag) => appendMaterial(activeTab, tag)}
+                  />
                 )}
               </div>
             </div>
@@ -374,10 +392,11 @@ export function RoomInventorySheet({
   )
 }
 
-/** Enkel ikonrad för de tre kategorier som inte har en egen yta i perspektivillustrationen
- * (Funktion, Utrustning, Övrigt) – Golv/Vägg/Tak väljs istället direkt i RoomPerspectiveNav. Den
- * aktiva kategorin markeras med en mörk, grafisk yta (grå/svart, inte en färg) istället för t.ex.
- * appens vanliga primärfärg, så den tydligt läses som ett eget litet kontrollsystem. */
+/** Enkel ikonrad, på en rad till höger om perspektivillustrationen, för de tre kategorier som
+ * inte har en egen yta där (Funktion, Utrustning, Övrigt) – Golv/Vägg/Tak väljs istället direkt i
+ * RoomPerspectiveNav. Den aktiva kategorin markeras med en mörk, grafisk yta (grå/svart, inte en
+ * färg) istället för t.ex. appens vanliga primärfärg, så den tydligt läses som ett eget litet
+ * kontrollsystem. */
 function CategoryRail({ active, onSelect }: { active: RoomTab; onSelect: (tab: RailTab) => void }) {
   return (
     <div className="category-rail">
@@ -508,27 +527,43 @@ function MaterialEntry({
 }
 
 /** Alltid synlig, fristående taggpalett för den aktiva kategorin (ingen omslutande behållare) –
- * en tagg går både att dra och att trycka direkt på för att lägga till den i kortet. */
-function TagPalette({ projectId, category, onPick }: { projectId: string; category: RoomCategory; onPick: (tag: MaterialTag) => void }) {
+ * en tagg går både att dra och att trycka direkt på för att lägga till den i kortet. Expanderar
+ * (och tonar ner innehållet till vänster om strecket, se RoomInventorySheet) medan man skapar en
+ * ny tagg, så Kod/Beskrivning-fälten får gott om plats istället för att klämmas in i den annars
+ * smala paletten. */
+function TagPalette({
+  projectId,
+  category,
+  creating,
+  onCreatingChange,
+  onPick,
+}: {
+  projectId: string
+  category: RoomCategory
+  creating: boolean
+  onCreatingChange: (creating: boolean) => void
+  onPick: (tag: MaterialTag) => void
+}) {
   const tags = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).sortBy('code'),
     [projectId, category],
   )
-  const [creating, setCreating] = useState(false)
 
   return (
-    <div className="tag-palette">
-      <div className="tag-palette-list">
-        {tags === undefined ? null : tags.length === 0 && !creating ? (
-          <p className="field-hint">Inga taggar ännu.</p>
-        ) : (
-          tags.map((tag) => <PaletteTag key={tag.id} tag={tag} onPick={() => onPick(tag)} />)
-        )}
-      </div>
+    <div className={`tag-palette${creating ? ' expanded' : ''}`}>
+      {!creating && (
+        <div className="tag-palette-list">
+          {tags === undefined ? null : tags.length === 0 ? (
+            <p className="field-hint">Inga taggar ännu.</p>
+          ) : (
+            tags.map((tag) => <PaletteTag key={tag.id} tag={tag} onPick={() => onPick(tag)} />)
+          )}
+        </div>
+      )}
       {creating ? (
-        <PaletteTagCreate projectId={projectId} category={category} onDone={() => setCreating(false)} />
+        <PaletteTagCreate projectId={projectId} category={category} onDone={() => onCreatingChange(false)} />
       ) : (
-        <button type="button" className="material-add-btn" onClick={() => setCreating(true)}>
+        <button type="button" className="material-add-btn" onClick={() => onCreatingChange(true)}>
           + Skapa ny tagg
         </button>
       )}
