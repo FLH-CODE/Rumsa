@@ -32,6 +32,11 @@ export async function importDrawingFile(projectId: string, file: File): Promise<
   const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
   const levelByName = new Map(existingLevels.map((level) => [level.name, level]))
 
+  // Nya sidor läggs alltid sist i den manuella ordningen (men behåller PDF:ens egen inbördes
+  // ordning sinsemellan) tills man själv drar om dem – se DrawingPage.order.
+  const existingPages = await db.drawingPages.where('projectId').equals(projectId).toArray()
+  const orderBase = existingPages.reduce((max, p) => Math.max(max, p.order), -1) + 1
+
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber)
     const [levelLabel, thumbnailDataUrl] = await Promise.all([
@@ -48,6 +53,7 @@ export async function importDrawingFile(projectId: string, file: File): Promise<
       pageIndex: pageNumber - 1,
       levelId,
       thumbnailDataUrl,
+      order: orderBase + (pageNumber - 1),
     }
     await db.drawingPages.add(drawingPage)
     await syncRoomsForPage(page, drawingPage, roomNumberPattern)

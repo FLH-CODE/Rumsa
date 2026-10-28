@@ -18,6 +18,7 @@ import {
   TrashIcon,
   ChevronRightIcon,
   LinkIcon,
+  BackIcon,
 } from '../components/icons'
 
 export default function ProjectDetailPage() {
@@ -168,7 +169,7 @@ export default function ProjectDetailPage() {
     <>
       <header className="app-header">
         <button className="btn-ghost btn tap-target" onClick={() => navigate('/')} aria-label="Tillbaka">
-          ←
+          <BackIcon width={20} height={20} />
         </button>
         <input
           className="header-title-input"

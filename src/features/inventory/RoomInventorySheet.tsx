@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory, type RoomType } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
-import { ensureInventoryRecord } from './defaultTemplate'
+import { ensureInventoryRecord, emptyCategories } from './defaultTemplate'
 import { InventoryWorkspace } from './InventoryWorkspace'
 import { deleteRoomCascade, deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { linkRoomToType, unlinkRoomFromType } from './roomTypeLink'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { LinkIcon } from '../../components/icons'
+import { LinkIcon, LinkOffIcon } from '../../components/icons'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -176,6 +176,24 @@ export function RoomInventorySheet({
     setShowTypeMenu(false)
   }
 
+  const handleClearRoomData = async () => {
+    if (!record) return
+    const confirmed = await confirmDialog('Rensa all inventeringsdata för rummet? Detta går inte att ångra.', {
+      danger: true,
+    })
+    if (!confirmed) return
+    await db.inventoryRecords.update(record.id, {
+      categories: emptyCategories(),
+      antalPersoner: '',
+      funktionsbeskrivning: '',
+      dagsljus: '',
+      storlek: '',
+      updatedAt: Date.now(),
+    })
+    setLoaded(null)
+    setShowTypeMenu(false)
+  }
+
   // Ett rum kopplat till ett typrum visar alltid typrummets data, aldrig rummets egen (dolda och
   // orörd) inventeringspost, och går inte att redigera eller skapa taggar i direkt.
   const effective: Loaded | null = linkedType
@@ -222,7 +240,11 @@ export function RoomInventorySheet({
               aria-label={linkedType ? `Kopplad till typrummet ${linkedType.name}` : 'Koppla till typrum'}
               title={linkedType ? `Kopplad till typrummet ${linkedType.name}` : 'Koppla till typrum'}
             >
-              <LinkIcon width={18} height={18} className={linkedType ? 'room-type-link-active' : undefined} />
+              {linkedType ? (
+                <LinkIcon width={24} height={24} className="room-type-link-active" />
+              ) : (
+                <LinkOffIcon width={24} height={24} />
+              )}
             </button>
             <span className="field-hint save-status" data-status={status}>
               {STATUS_LABEL[status]}
@@ -255,47 +277,55 @@ export function RoomInventorySheet({
                     ))}
                   </div>
                 )}
+                <button type="button" className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleClearRoomData()}>
+                  Rensa rumsdata
+                </button>
               </>
             )}
           </div>
         )}
 
-        {loadError ? (
-          <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
-            {loadError}
-          </p>
-        ) : effective === null ? (
-          <p className="field-hint">Laddar…</p>
-        ) : (
-          <InventoryWorkspace
-            projectId={projectId}
-            categories={effective.categories}
-            setCategoryEntry={setCategoryEntry}
-            funktion={{
-              antalPersoner: effective.antalPersoner,
-              funktionsbeskrivning: effective.funktionsbeskrivning,
-              dagsljus: effective.dagsljus,
-              storlek: effective.storlek,
-            }}
-            setFunktionField={(key, value) => setField(key, value)}
-            readOnly={Boolean(linkedType)}
-            onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
-          />
-        )}
+        {/* Dold medan menyn är öppen – att visa både menyns "ärver all data från X" och hela den
+           ärvda arbetsytan samtidigt kändes rörigt och redundant. */}
+        {!showTypeMenu &&
+          (loadError ? (
+            <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
+              {loadError}
+            </p>
+          ) : effective === null ? (
+            <p className="field-hint">Laddar…</p>
+          ) : (
+            <InventoryWorkspace
+              projectId={projectId}
+              categories={effective.categories}
+              setCategoryEntry={setCategoryEntry}
+              funktion={{
+                antalPersoner: effective.antalPersoner,
+                funktionsbeskrivning: effective.funktionsbeskrivning,
+                dagsljus: effective.dagsljus,
+                storlek: effective.storlek,
+              }}
+              setFunktionField={(key, value) => setField(key, value)}
+              readOnly={Boolean(linkedType)}
+              onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
+            />
+          ))}
 
-        <div className="modal-actions inventory-sheet-footer">
-          <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
-            Ta bort rum
-          </button>
-          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-            <button className="btn btn-secondary" onClick={() => void handleCancel()}>
-              Avbryt
+        {!showTypeMenu && (
+          <div className="modal-actions inventory-sheet-footer">
+            <button className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleDeleteRoom()}>
+              Ta bort rum
             </button>
-            <button className="btn btn-primary" onClick={() => void handleDone()}>
-              Klar
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <button className="btn btn-secondary" onClick={() => void handleCancel()}>
+                Avbryt
+              </button>
+              <button className="btn btn-primary" onClick={() => void handleDone()}>
+                Klar
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

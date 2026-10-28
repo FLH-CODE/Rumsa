@@ -4,7 +4,7 @@ import { db, createId, ROOM_CATEGORIES, type MaterialTag, type Room, type RoomCa
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { tagChipStyle } from './colorForValue'
 import { tagLabel } from './tagLabel'
-import { CloseIcon } from '../../components/icons'
+import { BackIcon } from '../../components/icons'
 import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { confirmDialog } from '../../components/ConfirmDialog'
@@ -63,8 +63,8 @@ export function TagsOverviewPanel({
     // (och i rumskortets fall, potentiellt radera) det underliggande lagret också.
     <div className="tags-overview" onClick={(e) => e.stopPropagation()}>
       <header className="app-header">
-        <button className="btn-ghost btn tap-target" onClick={onClose} aria-label="Stäng">
-          <CloseIcon />
+        <button className="btn-ghost btn tap-target" onClick={onClose} aria-label="Tillbaka">
+          <BackIcon />
         </button>
         <h1 style={{ fontSize: '1.05rem' }}>Taggar</h1>
         <span className="tap-target" aria-hidden="true" />

@@ -33,6 +33,10 @@ export interface DrawingPage {
   pageIndex: number
   levelId: string | null
   thumbnailDataUrl: string | null
+  /** Manuell sorteringsordning i sidlistan – går att dra om för hand. Nya sidor får ett värde som
+   * fortsätter efter alla befintliga (i PDF:ens egen sidordning), så en nyuppladdad PDF alltid
+   * börjar i sin egen interna ordning tills man själv drar om den. */
+  order: number
 }
 
 export interface Room {
@@ -390,6 +394,22 @@ class RumsaDB extends Dexie {
 
     this.rooms.hook('reading', (room: Room) =>
       typeof room.roomTypeId === 'undefined' ? { ...room, roomTypeId: null } : room,
+    )
+
+    // v9: sidöversikten går att dra om för hand istället för att alltid följa PDF:ens egen
+    // sidordning (pageIndex). Befintliga sidor får `order` satt till sitt nuvarande pageIndex så
+    // den upplevda ordningen inte ändras av uppgraderingen.
+    this.version(9).upgrade(async (tx) => {
+      await tx
+        .table('drawingPages')
+        .toCollection()
+        .modify((page: DrawingPage) => {
+          if (typeof page.order !== 'number') page.order = page.pageIndex
+        })
+    })
+
+    this.drawingPages.hook('reading', (page: DrawingPage) =>
+      typeof page.order === 'number' ? page : { ...page, order: page.pageIndex },
     )
 
     // Normaliserar varje läst post så att `categories` alltid har alla fem fasta kategorier med

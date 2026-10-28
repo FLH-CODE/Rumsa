@@ -159,56 +159,65 @@ export function InventoryWorkspace({
           <div className="room-workspace-main" inert={creatingTag}>
             <h2 className="active-category-label">{CATEGORY_LABEL[activeTab]}</h2>
             {activeTab === 'funktion' ? (
-              <div className="inventory-rows">
-                <div className="field">
-                  <label htmlFor="antal-personer">Antal personer</label>
-                  <input
-                    id="antal-personer"
-                    value={funktion.antalPersoner}
-                    placeholder="t.ex. 12"
-                    enterKeyHint="done"
-                    readOnly={readOnly}
-                    onChange={(e) => setFunktionField('antalPersoner', e.target.value)}
-                    onKeyDown={blurOnEnterEscape}
-                  />
+              readOnly ? (
+                <div className="inventory-rows">
+                  <FieldValue label="Antal personer" value={funktion.antalPersoner} />
+                  <FieldValue label="Funktionsbeskrivning" value={funktion.funktionsbeskrivning} />
+                  <FieldValue label="Dagsljus" value={funktion.dagsljus} />
+                  <FieldValue label="Storlek" value={funktion.storlek} />
+                  {!funktion.antalPersoner.trim() &&
+                    !funktion.funktionsbeskrivning.trim() &&
+                    !funktion.dagsljus.trim() &&
+                    !funktion.storlek.trim() && <p className="field-hint">Inget ifyllt.</p>}
                 </div>
-                <div className="field">
-                  <label htmlFor="funktionsbeskrivning">Funktionsbeskrivning</label>
-                  <textarea
-                    id="funktionsbeskrivning"
-                    rows={2}
-                    value={funktion.funktionsbeskrivning}
-                    placeholder="t.ex. Kommunikationsyta"
-                    readOnly={readOnly}
-                    onChange={(e) => setFunktionField('funktionsbeskrivning', e.target.value)}
-                    onKeyDown={blurOnEscape}
-                  />
+              ) : (
+                <div className="inventory-rows">
+                  <div className="field">
+                    <label htmlFor="antal-personer">Antal personer</label>
+                    <input
+                      id="antal-personer"
+                      value={funktion.antalPersoner}
+                      placeholder="t.ex. 12"
+                      enterKeyHint="done"
+                      onChange={(e) => setFunktionField('antalPersoner', e.target.value)}
+                      onKeyDown={blurOnEnterEscape}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="funktionsbeskrivning">Funktionsbeskrivning</label>
+                    <textarea
+                      id="funktionsbeskrivning"
+                      rows={2}
+                      value={funktion.funktionsbeskrivning}
+                      placeholder="t.ex. Kommunikationsyta"
+                      onChange={(e) => setFunktionField('funktionsbeskrivning', e.target.value)}
+                      onKeyDown={blurOnEscape}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="dagsljus">Dagsljus</label>
+                    <input
+                      id="dagsljus"
+                      value={funktion.dagsljus}
+                      placeholder="t.ex. Ja, fönster mot gård"
+                      enterKeyHint="done"
+                      onChange={(e) => setFunktionField('dagsljus', e.target.value)}
+                      onKeyDown={blurOnEnterEscape}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="storlek">Storlek</label>
+                    <input
+                      id="storlek"
+                      value={funktion.storlek}
+                      placeholder="t.ex. 24 m²"
+                      enterKeyHint="done"
+                      onChange={(e) => setFunktionField('storlek', e.target.value)}
+                      onKeyDown={blurOnEnterEscape}
+                    />
+                  </div>
                 </div>
-                <div className="field">
-                  <label htmlFor="dagsljus">Dagsljus</label>
-                  <input
-                    id="dagsljus"
-                    value={funktion.dagsljus}
-                    placeholder="t.ex. Ja, fönster mot gård"
-                    enterKeyHint="done"
-                    readOnly={readOnly}
-                    onChange={(e) => setFunktionField('dagsljus', e.target.value)}
-                    onKeyDown={blurOnEnterEscape}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="storlek">Storlek</label>
-                  <input
-                    id="storlek"
-                    value={funktion.storlek}
-                    placeholder="t.ex. 24 m²"
-                    enterKeyHint="done"
-                    readOnly={readOnly}
-                    onChange={(e) => setFunktionField('storlek', e.target.value)}
-                    onKeyDown={blurOnEnterEscape}
-                  />
-                </div>
-              </div>
+              )
             ) : (
               <CategoryContent
                 key={activeTab}
@@ -246,6 +255,19 @@ export function InventoryWorkspace({
         )}
       </DragOverlay>
     </DndContext>
+  )
+}
+
+/** Visar ett fälts värde som vanlig text – ingen inputbehållare att redigera i, och syns inte alls
+ * om fältet är tomt (en tom "förklarande" inputruta utan redigeringsmöjlighet ger bara intrycket
+ * av en trasig/låst kontroll). Används för skrivskyddade (typrums-ärvda) fält. */
+function FieldValue({ label, value }: { label: string; value: string }) {
+  if (!value.trim()) return null
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <p className="field-static-value">{value}</p>
+    </div>
   )
 }
 
@@ -330,19 +352,22 @@ function CategoryContent({
         ))}
         {dropIndicatorIndex === entry.materials.length && entry.materials.length > 0 && <div className="insert-indicator" />}
       </div>
-      <div className="field">
-        <label htmlFor={`ovrigt-${category}`}>Övrigt</label>
-        <RowTextInput
-          inputId={`ovrigt-${category}`}
-          projectId={projectId}
-          source="ovrigt"
-          multiline
-          readOnly={readOnly}
-          value={entry.ovrigt}
-          onChange={onOvrigtChange}
-          placeholder="t.ex. Anmärkning om skicket"
-        />
-      </div>
+      {readOnly ? (
+        <FieldValue label="Övrigt" value={entry.ovrigt} />
+      ) : (
+        <div className="field">
+          <label htmlFor={`ovrigt-${category}`}>Övrigt</label>
+          <RowTextInput
+            inputId={`ovrigt-${category}`}
+            projectId={projectId}
+            source="ovrigt"
+            multiline
+            value={entry.ovrigt}
+            onChange={onOvrigtChange}
+            placeholder="t.ex. Anmärkning om skicket"
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -386,15 +411,18 @@ function MaterialEntry({
           </button>
         )}
       </div>
-      <RowTextInput
-        projectId={projectId}
-        source="materialNote"
-        multiline
-        readOnly={readOnly}
-        value={reference.note}
-        onChange={onNoteChange}
-        placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
-      />
+      {readOnly ? (
+        reference.note.trim() && <p className="field-static-value material-entry-note">{reference.note}</p>
+      ) : (
+        <RowTextInput
+          projectId={projectId}
+          source="materialNote"
+          multiline
+          value={reference.note}
+          onChange={onNoteChange}
+          placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
+        />
+      )}
     </div>
   )
 }

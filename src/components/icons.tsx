@@ -169,6 +169,29 @@ export function LinkIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** "Kopplingen bruten" – samma två bågar som LinkIcon, fast isärdragna (inte sammanlänkade) plus
+ * ett snett streck tvärs över, så det tydligt läses som motsatsen till en aktiv koppling. */
+export function LinkOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10.5 15.5a4 4 0 0 1-5.4 0 3.8 3.8 0 0 1 0-5.4L7 8.2" />
+      <path d="M13.5 8.5a4 4 0 0 1 5.4 0 3.8 3.8 0 0 1 0 5.4L17 15.8" />
+      <path d="M3 3l18 18" />
+    </svg>
+  )
+}
+
+/** Tydlig, tjock pil (inte webbläsarens tunna "←"-tecken) för "tillbaka"-knappar – samma
+ * streckbredd/ändar som appens övriga ikoner, så den läses konsekvent och centrerar sig korrekt
+ * i en rund tap-target istället för att sitta snett pga tecknets egna, ojämna marginaler. */
+export function BackIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 12H5M11 18l-6-6 6-6" />
+    </svg>
+  )
+}
+
 export function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

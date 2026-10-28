@@ -209,6 +209,24 @@ textarea:focus-visible {
   padding: 0;
 }
 
+/* Ersätter den tidigare flytande "+"-knappen (fab) – en vanlig kortrad överst i listan, i samma
+   stil som befintliga projekt, så "skapa nytt" känns som en del av listan istället för en
+   fristående knapp som flyter ovanpå allt annat. */
+.new-project-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px dashed var(--color-border);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.new-project-card:active {
+  background: var(--color-bg);
+}
+
 .card-link-btn {
   flex: 1;
   text-align: left;
@@ -374,6 +392,20 @@ textarea:focus-visible {
   color: var(--color-text-muted);
 }
 
+/* Skrivskyddat fältvärde (t.ex. ärvt från ett typrum) – ren text, ingen inputbehållare runt den,
+   så det tydligt läses som "det här är bara visat", inte "det här går att klicka i". */
+.field-static-value {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.material-entry-note {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
 .modal-actions {
   display: flex;
   gap: 10px;
@@ -518,6 +550,17 @@ textarea:focus-visible {
   background: rgba(0, 0, 0, 0.7);
 }
 
+/* Centrerad istället för vänsterankrad, men bara när det finns gott om bredd att göra det på utan
+   att krocka med ikongruppen i höger hörn (~220px) – på en smal telefon vinner krockskyddet och
+   pillen stannar vänsterankrad som tidigare. */
+@media (min-width: 520px) {
+  .viewer-level-pill {
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 220px;
+  }
+}
+
 .viewer-level-name {
   color: #fff;
   font-weight: 600;
@@ -529,13 +572,14 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* Flik för att dra ut/in sidöversikten, fäst mitt på vänsterkanten som ett bokmärke – hör tydligt
-   ihop med panelen den styr istället för att vara en knapp bland övriga i hörnet. */
+/* Flik för att dra ut/in sidöversikten, fäst som ett bokmärke i vänsterkanten – hör tydligt ihop
+   med panelen den styr istället för att vara en knapp bland övriga i hörnet. Ankrad en bit under
+   toppraden (inte lodrätt mitt på hela sidan) – mitt på sidan kunde den annars hamna mitt i en
+   miniatyrbild i sidlistan och se ut som att den satt fast i/skar av just den bilden. */
 .viewer-sidebar-tab {
   position: absolute;
-  top: 50%;
+  top: calc(70px + var(--safe-top));
   left: 0;
-  transform: translateY(-50%);
   width: 28px;
   height: 56px;
   border-radius: 0 10px 10px 0;
@@ -599,6 +643,11 @@ textarea:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  touch-action: none;
+}
+
+.viewer-thumb.dragging {
+  opacity: 0.5;
 }
 
 .viewer-thumb img {
@@ -926,6 +975,10 @@ textarea:focus-visible {
   display: flex;
   flex-direction: row;
   gap: 4px;
+  /* Perspektivikonens faktiskt synliga form börjar en bit under SVG-rutans egen överkant (tomrum
+     i viewBox ovanför själva "taket") – den här marginalen flyttar ned ikonraden så dess highlight
+     linjerar med där perspektivgrafiken visuellt börjar, inte den osynliga SVG-rutans kant. */
+  margin-top: 10px;
 }
 
 /* Samma streck (STROKE) och highlight-färg (HIGHLIGHT) som RoomPerspectiveNav.tsx använder för
@@ -949,7 +1002,9 @@ textarea:focus-visible {
 
 .category-rail-btn.active {
   background: rgba(22, 78, 99, 0.38);
-  color: #b8c2c7;
+  /* Vit istället för samma ljusgrå som strecket annars har – den ljusgrå tonen gav nästan ingen
+     kontrast mot highlight-fyllningen och ikonen syntes knappt. */
+  color: #ffffff;
 }
 
 .room-workspace-main {
@@ -1022,13 +1077,16 @@ textarea:focus-visible {
   padding: 16px;
 }
 
-/* En tunn linje som visar exakt var en dragen tagg hamnar (mellan två befintliga material)
-   istället för att bara tona hela listan – se dropIndicatorIndex i RoomInventorySheet. */
+/* En tydlig linje som visar exakt var en dragen tagg hamnar (mellan två befintliga material)
+   istället för att bara tona hela listan – se dropIndicatorIndex i InventoryWorkspace. Ingen
+   negativ marginal (fanns tidigare för att "spara plats") – den fick linjen att visuellt krocka
+   med/täcka innehållet ovanför istället för att bara skjuta isär listan en aning, vilket kändes
+   förvirrande mitt i en dragning. */
 .insert-indicator {
-  height: 3px;
+  height: 4px;
   background: var(--color-primary);
   border-radius: 2px;
-  margin: -6px 0;
+  box-shadow: 0 0 0 3px rgba(22, 78, 99, 0.15);
 }
 
 .material-entry {
@@ -1060,6 +1118,7 @@ textarea:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: filter 0.1s ease, transform 0.1s ease;
 }
 
 .material-entry-remove {
@@ -1142,8 +1201,12 @@ textarea:focus-visible {
   touch-action: none;
 }
 
-.palette-tag:hover {
-  background: #ececea;
+/* Ingen grå rektangel bakom hela raden vid hover – för mycket visuell vikt för en ren
+   hover-respons. Taggen själv blir istället en aning mörkare och växer marginellt, vilket räcker
+   för att kännas "klickbar/dragbar" utan att dra blicken från texten. */
+.palette-tag:hover .tag-chip {
+  filter: brightness(0.93);
+  transform: scale(1.04);
 }
 
 .palette-tag:active {

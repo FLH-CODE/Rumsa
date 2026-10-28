@@ -7,7 +7,7 @@ import { InventoryWorkspace } from '../inventory/InventoryWorkspace'
 import { deleteRoomTypeCascade, deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { CloseIcon } from '../../components/icons'
+import { BackIcon } from '../../components/icons'
 
 /**
  * Typrum – förinställd rumsinfo som valfritt antal rum kan kopplas till (se RoomInventorySheet)
@@ -55,8 +55,8 @@ export default function RoomTypesPage() {
   return (
     <div className="tags-overview">
       <header className="app-header">
-        <button className="btn-ghost btn tap-target" onClick={() => navigate(`/project/${projectId}`)} aria-label="Stäng">
-          <CloseIcon />
+        <button className="btn-ghost btn tap-target" onClick={() => navigate(`/project/${projectId}`)} aria-label="Tillbaka">
+          <BackIcon />
         </button>
         <h1 style={{ fontSize: '1.05rem' }}>Typrum</h1>
         <span className="tap-target" aria-hidden="true" />
@@ -88,6 +88,19 @@ export default function RoomTypesPage() {
   )
 }
 
+/** Hittar nästa lediga "Namnlöst typrum N" – körs bara när man sparar utan att ha skrivit ett
+ * namn, så data aldrig går förlorad bara för att man glömde namnge det. */
+async function generateUnnamedTypeName(projectId: string, excludeId: string): Promise<string> {
+  const existingNames = new Set(
+    (await db.roomTypes.where('projectId').equals(projectId).toArray())
+      .filter((t) => t.id !== excludeId)
+      .map((t) => t.name),
+  )
+  let n = 1
+  while (existingNames.has(`Namnlöst typrum ${n}`)) n++
+  return `Namnlöst typrum ${n}`
+}
+
 function RoomTypeEditSheet({
   projectId,
   roomType,
@@ -114,11 +127,9 @@ function RoomTypeEditSheet({
     setCategories((prev) => ({ ...prev, [category]: updater(prev[category]) }))
 
   const persist = async () => {
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      await deleteRoomTypeCascade(roomType)
-      return
-    }
+    // Ett namnlöst typrum ska ALDRIG tappa sin ifyllda data tyst bara för att man glömt namnet –
+    // får istället ett automatiskt namn, precis som namnlösa typrum redan visas i listan.
+    const trimmedName = name.trim() || (await generateUnnamedTypeName(projectId, roomType.id))
     await db.roomTypes.update(roomType.id, {
       name: trimmedName,
       categories,

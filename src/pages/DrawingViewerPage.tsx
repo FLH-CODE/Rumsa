@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { db, createId, type DrawingPage, type Level, type Room } from '../db'
 import { useElementSize } from '../hooks/useElementSize'
 import { usePdfDocument } from '../features/pdf/usePdfDocument'
@@ -34,6 +37,7 @@ export default function DrawingViewerPage() {
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
   const [renamingLevel, setRenamingLevel] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
+  const pageSortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   // Manifestets display:"fullscreen" gäller bara en genväg man lagt till på hemskärmen – i en
   // vanlig öppen webbläsarflik (som den man ser i en vanlig Chrome-flik) går det inte att dölja
@@ -126,6 +130,21 @@ export default function DrawingViewerPage() {
     }
     await db.rooms.add(newRoom)
     setSelectedRoom(newRoom)
+  }
+
+  // Skriver om hela listans `order` 0..N-1 efter en dragning – enklast robusta sättet att undvika
+  // kollisioner mellan befintliga värden istället för att försöka klämma in ett nytt värde mellan
+  // två grannar.
+  const handlePageDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sortedPages.findIndex((p) => p.id === active.id)
+    const newIndex = sortedPages.findIndex((p) => p.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(sortedPages, oldIndex, newIndex)
+    await db.transaction('rw', db.drawingPages, async () => {
+      await Promise.all(reordered.map((page, index) => db.drawingPages.update(page.id, { order: index })))
+    })
   }
 
   if (pages === undefined || levels === undefined) {
@@ -241,18 +260,19 @@ export default function DrawingViewerPage() {
 
       <div className="viewer-body">
         <aside className={`viewer-sidebar${sidebarOpen ? '' : ' collapsed'}`}>
-          {sortedPages.map((page) => (
-            <button
-              key={page.id}
-              className={`viewer-thumb${page.id === currentPage.id ? ' active' : ''}`}
-              onClick={() => goTo(page.id)}
-            >
-              {page.thumbnailDataUrl && <img src={page.thumbnailDataUrl} alt="" />}
-              <span className="viewer-thumb-label">
-                {page.levelId ? levelById.get(page.levelId)?.name ?? '–' : 'Ej tilldelad'}
-              </span>
-            </button>
-          ))}
+          <DndContext sensors={pageSortSensors} collisionDetection={closestCenter} onDragEnd={(e) => void handlePageDragEnd(e)}>
+            <SortableContext items={sortedPages.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              {sortedPages.map((page) => (
+                <SortableThumb
+                  key={page.id}
+                  page={page}
+                  active={page.id === currentPage.id}
+                  label={page.levelId ? levelById.get(page.levelId)?.name ?? '–' : 'Ej tilldelad'}
+                  onSelect={() => goTo(page.id)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </aside>
 
         <div className="viewer-main" ref={mainRef}>
@@ -352,6 +372,35 @@ export default function DrawingViewerPage() {
   )
 }
 
+/** En enskild sida i sidlistan – dragbar (för att ändra ordning, se handlePageDragEnd) och
+ * samtidigt klickbar (för att hoppa dit) i ett och samma element. */
+function SortableThumb({
+  page,
+  active,
+  label,
+  onSelect,
+}: {
+  page: DrawingPage
+  active: boolean
+  label: string
+  onSelect: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id })
+  return (
+    <button
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`viewer-thumb${active ? ' active' : ''}${isDragging ? ' dragging' : ''}`}
+      onClick={onSelect}
+      {...attributes}
+      {...listeners}
+    >
+      {page.thumbnailDataUrl && <img src={page.thumbnailDataUrl} alt="" />}
+      <span className="viewer-thumb-label">{label}</span>
+    </button>
+  )
+}
+
 function sortPages(pages: DrawingPage[] | undefined, levels: Level[] | undefined): DrawingPage[] {
   if (!pages) return []
   const orderByLevelId = new Map((levels ?? []).map((l) => [l.id, l.order]))
@@ -359,7 +408,7 @@ function sortPages(pages: DrawingPage[] | undefined, levels: Level[] | undefined
     const orderA = a.levelId ? orderByLevelId.get(a.levelId) ?? Infinity : Infinity
     const orderB = b.levelId ? orderByLevelId.get(b.levelId) ?? Infinity : Infinity
     if (orderA !== orderB) return orderB - orderA // högre plan överst, som i sketchens nivålista
-    return a.pageIndex - b.pageIndex
+    return a.order - b.order
   })
 }
 

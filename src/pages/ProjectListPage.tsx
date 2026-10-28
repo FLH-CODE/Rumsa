@@ -5,7 +5,7 @@ import { db, createId, type Project } from '../db'
 import { deleteProjectCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
-import { TrashIcon, ChevronRightIcon } from '../components/icons'
+import { TrashIcon, ChevronRightIcon, PlusIcon } from '../components/icons'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
@@ -27,40 +27,36 @@ export default function ProjectListPage() {
         <h1>Rumsa</h1>
       </header>
       <main className="app-main">
-        {projects === undefined ? null : projects.length === 0 ? (
-          <div className="empty-state">
-            <p>Inga projekt ännu.</p>
-            <p>Tryck på + för att skapa ditt första inventeringsprojekt.</p>
-          </div>
-        ) : (
-          <div className="card-list">
-            {projects.map((project) => (
-              <div key={project.id} className="card project-card">
-                <button className="card-link-btn" onClick={() => navigate(`/project/${project.id}`)}>
-                  <span className="card-link">
-                    <strong>{project.name}</strong>
-                    <span>Uppdaterad {new Date(project.updatedAt).toLocaleDateString('sv-SE')}</span>
-                  </span>
-                </button>
-                <ChevronRightIcon className="project-card-chevron" />
-                <button
-                  className="project-delete-btn tap-target"
-                  aria-label={`Ta bort ${project.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleDelete(project)
-                  }}
-                >
-                  <TrashIcon width={18} height={18} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="card-list">
+          <button className="card new-project-card" onClick={() => setShowCreate(true)}>
+            <PlusIcon width={20} height={20} />
+            <span>Nytt projekt</span>
+          </button>
+          {projects === undefined
+            ? null
+            : projects.map((project) => (
+                <div key={project.id} className="card project-card">
+                  <button className="card-link-btn" onClick={() => navigate(`/project/${project.id}`)}>
+                    <span className="card-link">
+                      <strong>{project.name}</strong>
+                      <span>Uppdaterad {new Date(project.updatedAt).toLocaleDateString('sv-SE')}</span>
+                    </span>
+                  </button>
+                  <ChevronRightIcon className="project-card-chevron" />
+                  <button
+                    className="project-delete-btn tap-target"
+                    aria-label={`Ta bort ${project.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void handleDelete(project)
+                    }}
+                  >
+                    <TrashIcon width={18} height={18} />
+                  </button>
+                </div>
+              ))}
+        </div>
       </main>
-      <button className="fab tap-target" onClick={() => setShowCreate(true)} aria-label="Nytt projekt">
-        +
-      </button>
       {showCreate && <CreateProjectSheet onClose={() => setShowCreate(false)} />}
     </>
   )
