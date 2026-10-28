@@ -160,6 +160,15 @@ export function GripIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function LinkIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 14a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.24 1.23" />
+      <path d="M14 10a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 0 0 5.66 5.66l1.24-1.23" />
+    </svg>
+  )
+}
+
 export function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

@@ -85,8 +85,13 @@ export default function DrawingViewerPage() {
         set.add(record.roomId)
       }
     }
+    // Ett rum kopplat till ett typrum räknas alltid som klart – det ärver all sin data därifrån,
+    // så dess egen (ev. tomma) inventeringspost säger inget om huruvida rummet är ifyllt.
+    for (const room of rooms ?? []) {
+      if (room.roomTypeId) set.add(room.id)
+    }
     return set
-  }, [records])
+  }, [records, rooms])
 
   const tags = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId ?? '').sortBy('code'),
@@ -117,6 +122,7 @@ export default function DrawingViewerPage() {
       tagX: pdfX,
       tagY: pdfY,
       templateId: null,
+      roomTypeId: null,
     }
     await db.rooms.add(newRoom)
     setSelectedRoom(newRoom)

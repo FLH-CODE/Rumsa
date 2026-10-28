@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db'
-import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
+import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
 
 const MAX_SUGGESTIONS = 6
 
@@ -35,9 +35,10 @@ function useFieldSuggestions(projectId: string, source: SuggestionSource): strin
 }
 
 /**
- * Enkelt textfält med förslag från tidigare ifyllda texter av samma sort i projektet. Till
- * skillnad från materialtaggarna är det här fri löptext – därför bara förslag, ingen separat
- * lagring.
+ * Textfält med förslag från tidigare ifyllda texter av samma sort i projektet. Till skillnad från
+ * materialtaggarna är det här fri löptext – därför bara förslag, ingen separat lagring.
+ * `multiline` ger en flerradig textarea (Enter skriver ny rad istället för att avsluta
+ * redigeringen) för anteckningar som behöver mer än en rad.
  */
 export function RowTextInput({
   projectId,
@@ -46,6 +47,8 @@ export function RowTextInput({
   onChange,
   placeholder,
   inputId,
+  multiline = false,
+  readOnly = false,
 }: {
   projectId: string
   source: SuggestionSource
@@ -53,10 +56,13 @@ export function RowTextInput({
   onChange: (value: string) => void
   placeholder?: string
   inputId?: string
+  multiline?: boolean
+  readOnly?: boolean
 }) {
   const suggestions = useFieldSuggestions(projectId, source)
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase()
@@ -66,23 +72,42 @@ export function RowTextInput({
 
   return (
     <div className="material-autocomplete">
-      <div className="material-autocomplete-field">
-        <input
-          ref={inputRef}
-          id={inputId}
-          value={value}
-          placeholder={placeholder}
-          enterKeyHint="done"
-          onChange={(e) => {
-            onChange(e.target.value)
-            setOpen(true)
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          onKeyDown={blurOnEnterEscape}
-        />
+      <div className={`material-autocomplete-field${multiline ? ' multiline' : ''}`}>
+        {multiline ? (
+          <textarea
+            ref={textareaRef}
+            id={inputId}
+            rows={2}
+            value={value}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            onChange={(e) => {
+              onChange(e.target.value)
+              setOpen(true)
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={blurOnEscape}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            id={inputId}
+            value={value}
+            placeholder={placeholder}
+            enterKeyHint="done"
+            readOnly={readOnly}
+            onChange={(e) => {
+              onChange(e.target.value)
+              setOpen(true)
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={blurOnEnterEscape}
+          />
+        )}
       </div>
-      {open && filtered.length > 0 && (
+      {!readOnly && open && filtered.length > 0 && (
         <ul className="material-suggestions">
           {filtered.map((s) => (
             <li key={s}>
@@ -93,6 +118,7 @@ export function RowTextInput({
                   onChange(s)
                   setOpen(false)
                   inputRef.current?.blur()
+                  textareaRef.current?.blur()
                 }}
               >
                 {s}

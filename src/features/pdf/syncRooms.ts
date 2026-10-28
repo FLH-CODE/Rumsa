@@ -44,6 +44,7 @@ export async function syncRoomsForPage(
           tagX: room.tagX,
           tagY: room.tagY,
           templateId: null,
+          roomTypeId: null,
         })
       }
     }

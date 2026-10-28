@@ -8,6 +8,7 @@ import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
+import { confirmDialog } from '../components/ConfirmDialog'
 import {
   FloorPlanIcon,
   DrawingIcon,
@@ -16,6 +17,7 @@ import {
   TagIcon,
   TrashIcon,
   ChevronRightIcon,
+  LinkIcon,
 } from '../components/icons'
 
 export default function ProjectDetailPage() {
@@ -113,17 +115,18 @@ export default function ProjectDetailPage() {
 
   const handleDelete = async () => {
     if (!projectId) return
-    if (!confirm(`Ta bort projektet "${project.name}"? Detta går inte att ångra.`)) return
+    const confirmed = await confirmDialog(`Ta bort projektet "${project.name}"? Detta går inte att ångra.`, { danger: true })
+    if (!confirmed) return
     await deleteProjectCascade(projectId)
     navigate('/')
   }
 
   const handleDeleteDrawing = async (drawingId: string, fileName: string) => {
-    if (
-      !confirm(`Ta bort ritningen "${fileName}"? Rum och inventering som hör till dess sidor tas bort permanent.`)
-    ) {
-      return
-    }
+    const confirmed = await confirmDialog(
+      `Ta bort ritningen "${fileName}"? Rum och inventering som hör till dess sidor tas bort permanent.`,
+      { danger: true },
+    )
+    if (!confirmed) return
     await deleteDrawingCascade(drawingId)
   }
 
@@ -253,6 +256,15 @@ export default function ProjectDetailPage() {
             <TagIcon className="settings-list-icon" />
             <span className="settings-list-label">Materialtaggar</span>
             <span className="settings-list-value">{tagCount ?? 0}</span>
+            <ChevronRightIcon className="settings-list-chevron" />
+          </button>
+          <button
+            className="settings-list-item"
+            onClick={() => navigate(`/project/${projectId}/room-types`)}
+            aria-label="Typrum"
+          >
+            <LinkIcon className="settings-list-icon" />
+            <span className="settings-list-label">Typrum</span>
             <ChevronRightIcon className="settings-list-chevron" />
           </button>
           <button

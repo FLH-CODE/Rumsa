@@ -20,3 +20,11 @@ export function blurOnEnterEscape(e: KeyboardEvent<HTMLInputElement>) {
     e.currentTarget.blur()
   }
 }
+
+/** Samma som blurOnEnterEscape, fast bara Escape – för flerradiga textfält (textarea) där Enter
+ * ska skriva en ny rad istället för att avsluta redigeringen. */
+export function blurOnEscape(e: KeyboardEvent<HTMLTextAreaElement>) {
+  if (e.key === 'Escape') {
+    e.currentTarget.blur()
+  }
+}

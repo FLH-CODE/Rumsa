@@ -46,6 +46,9 @@ export interface Room {
   tagX: number
   tagY: number
   templateId: string | null
+  /** Är rummet kopplat till ett typrum (se RoomType) ärver det all dess data – rumskortets egna
+   * fält blir då skrivskyddade och visar typrummets värden istället för rummets egen post. */
+  roomTypeId: string | null
 }
 
 /**
@@ -115,6 +118,24 @@ export interface MaterialTag {
   createdAt: number
 }
 
+/**
+ * Ett typrum – en förinställd uppsättning rumsinfo (samma fält som ett rums InventoryRecord) som
+ * valfritt antal rum kan kopplas till istället för att fylla i samma information om och om igen
+ * (t.ex. en standard-WC eller ett standardkontor som förekommer på många ställen i projektet). Ett
+ * kopplat rum ärver all data härifrån och går inte att redigera individuellt förrän det frigörs.
+ */
+export interface RoomType {
+  id: string
+  projectId: string
+  name: string
+  categories: Record<RoomCategory, CategoryEntry>
+  antalPersoner: string
+  funktionsbeskrivning: string
+  dagsljus: string
+  storlek: string
+  updatedAt: number
+}
+
 class RumsaDB extends Dexie {
   projects!: EntityTable<Project, 'id'>
   levels!: EntityTable<Level, 'id'>
@@ -124,6 +145,7 @@ class RumsaDB extends Dexie {
   inventoryRecords!: EntityTable<InventoryRecord, 'id'>
   inventoryTemplates!: EntityTable<InventoryTemplate, 'id'>
   materialTags!: EntityTable<MaterialTag, 'id'>
+  roomTypes!: EntityTable<RoomType, 'id'>
 
   constructor() {
     super('rumsa')
@@ -349,6 +371,26 @@ class RumsaDB extends Dexie {
           delete record.items
         })
     })
+
+    // v8: rum kan kopplas till ett typrum (se RoomType) istället för att fylla i samma
+    // rumsinformation för hand på varje likadant rum.
+    this.version(8)
+      .stores({
+        roomTypes: 'id, projectId, name, updatedAt',
+        rooms: 'id, projectId, levelId, drawingPageId, roomNumber, roomTypeId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('rooms')
+          .toCollection()
+          .modify((room: Room) => {
+            if (typeof room.roomTypeId === 'undefined') room.roomTypeId = null
+          })
+      })
+
+    this.rooms.hook('reading', (room: Room) =>
+      typeof room.roomTypeId === 'undefined' ? { ...room, roomTypeId: null } : room,
+    )
 
     // Normaliserar varje läst post så att `categories` alltid har alla fem fasta kategorier med
     // giltiga fält, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post

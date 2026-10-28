@@ -145,6 +145,11 @@ textarea:focus-visible {
   box-shadow: 0 2px 6px rgba(22, 78, 99, 0.3);
 }
 
+.btn-danger {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--color-primary-contrast);
@@ -256,6 +261,24 @@ textarea:focus-visible {
   z-index: 100;
 }
 
+/* Egen, liten bekräftelsedialog (se components/ConfirmDialog.tsx) som ersätter webbläsarens
+   inbyggda confirm() – den har alltid webbläsarens egen rubrik ("sidan säger…") och går varken
+   att stänga av eller göra mindre. z-index högre än både .modal-backdrop och .tags-overview så
+   den alltid hamnar överst, oavsett vilket lager den öppnas ovanpå. */
+.confirm-dialog-backdrop {
+  z-index: 300;
+}
+
+.confirm-dialog {
+  max-width: 320px;
+  gap: 16px;
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 /* Taggöversikten renderas alltid som en fristående overlay (aldrig bara "på plats" i ett
    flödeslayout) – det gör att den funkar likadant som en egen sida (route) och som ett lager
    ovanpå ritningsvisaren eller ett öppet rumskort, utan att det underliggande tappar sitt
@@ -325,13 +348,25 @@ textarea:focus-visible {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   font-size: 1rem;
   min-height: 44px;
   background: var(--color-surface);
+}
+
+.field textarea {
+  font-family: inherit;
+  resize: vertical;
+}
+
+.field input:read-only,
+.field textarea:read-only {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
 }
 
 .field-hint {
@@ -723,9 +758,15 @@ textarea:focus-visible {
 
 /* --- Inventeringsformulär --- */
 
+/* Fast höjd (inte bara ett max) så att kortets höjd – och därmed var dess överkant hamnar när
+   bakgrunden centrerar sheeten (se @media min-width:640px ovan) – aldrig ändras när man växlar
+   mellan arbetslägen med olika mängd innehåll. Annars hoppade rubrik/ikonrad upp och ner i takt
+   med att kortet växte/krympte för varje flik. Mobilens egna 100dvh (se nedan) tar över igen på
+   smala skärmar, där kortet redan är fast förankrat i hela skärmens höjd. */
 .inventory-sheet {
   width: 100%;
   max-width: 560px;
+  height: 85vh;
 }
 
 /* På telefon/smal skärm fyller rumskortet hela skärmen istället för att vara en botten-sheet med
@@ -771,6 +812,45 @@ textarea:focus-visible {
   flex-direction: column;
   flex: 1;
   min-width: 0;
+}
+
+.inventory-sheet-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.room-type-link-btn {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.room-type-link-active {
+  color: var(--color-primary);
+}
+
+.room-type-badge {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.room-type-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--color-bg);
+}
+
+.room-type-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .inventory-room-number,
@@ -846,12 +926,11 @@ textarea:focus-visible {
   display: flex;
   flex-direction: row;
   gap: 4px;
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
-  border-radius: 14px;
-  padding: 6px;
 }
 
+/* Samma streck (STROKE) och highlight-färg (HIGHLIGHT) som RoomPerspectiveNav.tsx använder för
+   sina ytor, så ikonralen läses som en fortsättning av samma kontrollsystem istället för en
+   separat, vitt inramad komponent. */
 .category-rail-btn {
   width: 40px;
   height: 40px;
@@ -859,17 +938,18 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3f3f46;
+  color: #b8c2c7;
+  background: transparent;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
 .category-rail-btn:hover {
-  background: #ececea;
+  background: rgba(22, 78, 99, 0.12);
 }
 
 .category-rail-btn.active {
-  background: #18181b;
-  color: #ffffff;
+  background: rgba(22, 78, 99, 0.38);
+  color: #b8c2c7;
 }
 
 .room-workspace-main {
@@ -1110,15 +1190,13 @@ textarea:focus-visible {
   }
 }
 
-/* Elementet som följer pekaren under en dragning (DragOverlay) – lite lyft/skuggat så det känns
-   som att man faktiskt plockat upp taggen, inte bara flyttat text. */
+/* Elementet som följer pekaren under en dragning (DragOverlay) – appliceras direkt på själva
+   taggchipet (ingen omslutande vit behållare), bara lite lyft/skuggat så det känns som att man
+   faktiskt plockat upp taggen, inte bara flyttat text. */
 .drag-preview {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
   opacity: 0.95;
   cursor: grabbing;
-  background: var(--color-surface);
-  padding: 6px 4px;
-  border-radius: 8px;
 }
 
 /* --- Materialförslag --- */
@@ -1144,19 +1222,35 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px rgba(22, 78, 99, 0.18);
 }
 
-.material-autocomplete-field input {
+.material-autocomplete-field input,
+.material-autocomplete-field textarea {
   flex: 1;
   min-width: 0;
   border: none;
   padding: 10px 2px;
   min-height: 44px;
   font-size: 1rem;
+  font-family: inherit;
   background: transparent;
 }
 
-.material-autocomplete-field input:focus-visible {
+.material-autocomplete-field textarea {
+  resize: vertical;
+}
+
+.material-autocomplete-field.multiline {
+  align-items: flex-start;
+}
+
+.material-autocomplete-field input:focus-visible,
+.material-autocomplete-field textarea:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.material-autocomplete-field input:read-only,
+.material-autocomplete-field textarea:read-only {
+  color: var(--color-text-muted);
 }
 
 .material-color-dot {
@@ -1310,12 +1404,30 @@ textarea:focus-visible {
 
 /* --- Taggöversikt --- */
 
+/* Ytterbehållaren (en div, inte en knapp – se ProjectListPage.tsx-mönstret) så att öppna-tagg-
+   knappen och den fristående X-knappen för snabb borttagning kan vara två skilda, egna knappar
+   istället för en knapp inuti en knapp. */
 .tag-card {
   display: flex;
   align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.tag-card-open {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  flex: 1;
   width: 100%;
+  min-width: 0;
   text-align: left;
+  padding: 14px 16px;
+}
+
+.tag-card-remove {
+  flex-shrink: 0;
+  margin-right: 8px;
 }
 
 .tag-card-text {

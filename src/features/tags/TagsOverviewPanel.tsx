@@ -7,6 +7,7 @@ import { tagLabel } from './tagLabel'
 import { CloseIcon } from '../../components/icons'
 import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
+import { confirmDialog } from '../../components/ConfirmDialog'
 
 /**
  * Översikt över projektets tagg-bibliotek – en sektion per fast kategori (Golv, Vägg, Tak,
@@ -29,6 +30,19 @@ export function TagsOverviewPanel({
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).sortBy('code'), [projectId])
   const [editingTag, setEditingTag] = useState<MaterialTag | null>(null)
   const [creatingCategory, setCreatingCategory] = useState<RoomCategory | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const handleQuickDelete = async (tag: MaterialTag) => {
+    const confirmed = await confirmDialog(`Ta bort taggen "${tag.code}"? Den tas bort från alla rum som använder den.`, {
+      danger: true,
+    })
+    if (!confirmed) return
+    try {
+      await deleteMaterialTagCascade(projectId, tag.id)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Kunde inte ta bort taggen.')
+    }
+  }
 
   // Hur många rum som refererar varje tagg – så man ser omfattningen direkt i listan, inte bara
   // efter att ha öppnat en enskild tagg.
@@ -68,15 +82,25 @@ export function TagsOverviewPanel({
                   {categoryTags.map((tag) => {
                     const roomCount = roomCountByTag?.get(tag.id) ?? 0
                     return (
-                      <button key={tag.id} className="card tag-card" onClick={() => setEditingTag(tag)}>
-                        <span className="tag-card-text">
-                          <span className="tag-chip" style={tagChipStyle(tag.code)}>
-                            {tagLabel(tag)}
+                      <div key={tag.id} className="card tag-card">
+                        <button type="button" className="tag-card-open" onClick={() => setEditingTag(tag)}>
+                          <span className="tag-card-text">
+                            <span className="tag-chip" style={tagChipStyle(tag.code)}>
+                              {tagLabel(tag)}
+                            </span>
+                            <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
                           </span>
-                          <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
-                        </span>
-                        {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
-                      </button>
+                          {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
+                        </button>
+                        <button
+                          type="button"
+                          className="material-entry-remove tag-card-remove"
+                          onClick={() => void handleQuickDelete(tag)}
+                          aria-label={`Ta bort ${tag.code}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -87,6 +111,11 @@ export function TagsOverviewPanel({
             </section>
           )
         })}
+        {deleteError && (
+          <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
+            {deleteError}
+          </p>
+        )}
       </main>
       {(editingTag || creatingCategory) && (
         <TagEditSheet
@@ -181,7 +210,10 @@ function TagEditSheet({
 
   const handleDelete = async () => {
     if (!tag) return
-    if (!confirm(`Ta bort taggen "${tag.code}"? Den tas bort från alla rum som använder den.`)) return
+    const confirmed = await confirmDialog(`Ta bort taggen "${tag.code}"? Den tas bort från alla rum som använder den.`, {
+      danger: true,
+    })
+    if (!confirmed) return
     try {
       await deleteMaterialTagCascade(projectId, tag.id)
       onClose()

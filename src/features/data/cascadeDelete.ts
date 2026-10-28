@@ -1,4 +1,4 @@
-import { db, type InventoryRecord } from '../../db'
+import { db, type InventoryRecord, type RoomType } from '../../db'
 
 /**
  * Tar bort ett helt projekt och allt som hör till det – ritningar (inkl. PDF-blobbar), sidor,
@@ -70,5 +70,31 @@ export async function deleteMaterialTagCascade(projectId: string, tagId: string)
       })
     }
     await db.materialTags.delete(tagId)
+  })
+}
+
+/**
+ * Tar bort ett typrum. Rum som var kopplade till det friges automatiskt – precis som en manuell
+ * frigöring skrivs typrummets senaste data in i respektive rums egen inventeringspost först, så
+ * att ingen information bara försvinner tyst när typrummet tas bort.
+ */
+export async function deleteRoomTypeCascade(roomType: RoomType): Promise<void> {
+  await db.transaction('rw', [db.rooms, db.inventoryRecords, db.roomTypes], async () => {
+    const rooms = await db.rooms.where('roomTypeId').equals(roomType.id).toArray()
+    for (const room of rooms) {
+      const record = await db.inventoryRecords.where('roomId').equals(room.id).first()
+      if (record) {
+        await db.inventoryRecords.update(record.id, {
+          categories: roomType.categories,
+          antalPersoner: roomType.antalPersoner,
+          funktionsbeskrivning: roomType.funktionsbeskrivning,
+          dagsljus: roomType.dagsljus,
+          storlek: roomType.storlek,
+          updatedAt: Date.now(),
+        })
+      }
+      await db.rooms.update(room.id, { roomTypeId: null })
+    }
+    await db.roomTypes.delete(roomType.id)
   })
 }

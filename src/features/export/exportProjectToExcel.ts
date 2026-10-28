@@ -12,19 +12,32 @@ const LEGEND_HEADER = ['Kategori', 'Kod', 'Beskrivning']
  * rumsnummer, plus en taggförteckning. Laddas ner direkt i webbläsaren.
  */
 export async function exportProjectToExcel(project: Project): Promise<void> {
-  const [rooms, levels, tags] = await Promise.all([
+  const [rooms, levels, tags, roomTypes] = await Promise.all([
     db.rooms.where('projectId').equals(project.id).toArray(),
     db.levels.where('projectId').equals(project.id).toArray(),
     db.materialTags.where('projectId').equals(project.id).toArray(),
+    db.roomTypes.where('projectId').equals(project.id).toArray(),
   ])
   const levelById = new Map(levels.map((l) => [l.id, l]))
   const tagById = new Map(tags.map((t) => [t.id, t]))
+  const roomTypeById = new Map(roomTypes.map((t) => [t.id, t]))
 
   const records = await db.inventoryRecords
     .where('roomId')
     .anyOf(rooms.map((r) => r.id))
     .toArray()
   const recordByRoomId = new Map(records.map((r) => [r.roomId, r]))
+
+  // Ett rum kopplat till ett typrum exporterar typrummets data (vad kortet faktiskt visar),
+  // inte rummets egen – ofyllda eller matchande – bakgrundspost.
+  type EffectiveData = Pick<
+    import('../../db').InventoryRecord,
+    'categories' | 'antalPersoner' | 'funktionsbeskrivning' | 'dagsljus' | 'storlek'
+  >
+  const effectiveDataForRoom = (room: (typeof rooms)[number]): EffectiveData | undefined => {
+    if (room.roomTypeId) return roomTypeById.get(room.roomTypeId)
+    return recordByRoomId.get(room.id)
+  }
 
   const sortedRooms = [...rooms].sort((a, b) => {
     const orderA = a.levelId ? (levelById.get(a.levelId)?.order ?? Infinity) : Infinity
@@ -50,7 +63,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
 
   for (const room of sortedRooms) {
     const levelName = room.levelId ? (levelById.get(room.levelId)?.name ?? '') : ''
-    const record = recordByRoomId.get(room.id)
+    const record = effectiveDataForRoom(room)
 
     const categoriesWithContent = record
       ? ROOM_CATEGORIES.filter((c) => record.categories[c].materials.length > 0 || record.categories[c].ovrigt.trim())

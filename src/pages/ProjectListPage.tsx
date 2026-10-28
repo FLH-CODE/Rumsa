@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { db, createId, type Project } from '../db'
 import { deleteProjectCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
+import { confirmDialog } from '../components/ConfirmDialog'
 import { TrashIcon, ChevronRightIcon } from '../components/icons'
 
 export default function ProjectListPage() {
@@ -12,13 +13,11 @@ export default function ProjectListPage() {
   const [showCreate, setShowCreate] = useState(false)
 
   const handleDelete = async (project: Project) => {
-    if (
-      !confirm(
-        `Ta bort projektet "${project.name}"? Ritningar och all inventerad data för projektet tas bort permanent.`,
-      )
-    ) {
-      return
-    }
+    const confirmed = await confirmDialog(
+      `Ta bort projektet "${project.name}"? Ritningar och all inventerad data för projektet tas bort permanent.`,
+      { danger: true },
+    )
+    if (!confirmed) return
     await deleteProjectCascade(project.id)
   }
 

@@ -6,11 +6,13 @@ import type { ElementSize } from '../../hooks/useElementSize'
 /** Hur mycket extra upplösning (utöver skärmens pixeltäthet) som renderas utöver fit-to-screen,
  * så att man kan zooma in en bit innan bilden börjar bli suddig/pixelerad. */
 const BASE_SHARPNESS = 5
-/** Skyddar mot canvas-storleksgränser på vissa mobila webbläsare (t.ex. iOS Safari), som historiskt
- * satt gränsen vid total yta (bredd×höjd) snarare än en enda sidas mått – räknat som yta istället
- * för en platt maxbredd/höjd får avlånga planritningar (vanligt i liggande format) utnyttja hela
- * gränsen, vilket ger märkbart skarpare bild vid djup inzoomning än en enkel maxmått-gräns. */
-const MAX_BACKING_AREA = 4096 * 4096
+/** Skyddar mot canvas-storleksgränser på mobila webbläsare, räknat som total yta (bredd×höjd)
+ * snarare än en enda sidas mått – avlånga planritningar (vanligt i liggande format) får då
+ * utnyttja hela gränsen, vilket ger märkbart skarpare bild vid djup inzoomning än en enkel
+ * maxmått-gräns. Stora (A1/A0) ritningar i hög DPI kunde annars tvingas ner till en upplösning
+ * strax över fit-to-screen, vilket gjorde rumstaggar och text pixelerade redan vid måttlig
+ * inzoomning – moderna mobila webbläsare klarar betydligt mer än det gamla, konservativa 4096×4096. */
+const MAX_BACKING_AREA = 8192 * 8192
 
 /** Hur långt man kan zooma in bortom fit-to-screen (scale 1). Satt högre än BASE_SHARPNESS –
  * bortom den punkten blir bilden gradvis mjukare istället för att tvärstanna, vilket känns mycket

@@ -1,6 +1,6 @@
 import { db, createId, ROOM_CATEGORIES, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory } from '../../db'
 
-function emptyCategories(): Record<RoomCategory, CategoryEntry> {
+export function emptyCategories(): Record<RoomCategory, CategoryEntry> {
   return Object.fromEntries(ROOM_CATEGORIES.map((category) => [category, { materials: [], ovrigt: '' }])) as unknown as Record<
     RoomCategory,
     CategoryEntry
