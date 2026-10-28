@@ -8,12 +8,25 @@ import { db, type InventoryRecord, type RoomType } from '../../db'
 export async function deleteProjectCascade(projectId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.projects, db.levels, db.drawings, db.drawingPages, db.rooms, db.inventoryRecords, db.materialTags, db.roomTypes, db.roomPhotos],
+    [
+      db.projects,
+      db.levels,
+      db.drawings,
+      db.drawingPages,
+      db.rooms,
+      db.inventoryRecords,
+      db.materialTags,
+      db.roomTypes,
+      db.roomPhotos,
+      db.tagPhotos,
+    ],
     async () => {
       const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
       const roomIds = rooms.map((r) => r.id)
+      const tags = await db.materialTags.where('projectId').equals(projectId).toArray()
       await db.inventoryRecords.where('roomId').anyOf(roomIds).delete()
       await db.roomPhotos.where('roomId').anyOf(roomIds).delete()
+      await db.tagPhotos.where('tagId').anyOf(tags.map((t) => t.id)).delete()
       await Promise.all([
         db.rooms.where('projectId').equals(projectId).delete(),
         db.drawingPages.where('projectId').equals(projectId).delete(),
@@ -60,7 +73,7 @@ export async function deleteRoomCascade(roomId: string): Promise<void> {
  * teoretiskt kunna lämna en referens i fel kategori, så vi städar alla för säkerhets skull).
  */
 export async function deleteMaterialTagCascade(projectId: string, tagId: string): Promise<void> {
-  await db.transaction('rw', [db.materialTags, db.rooms, db.inventoryRecords], async () => {
+  await db.transaction('rw', [db.materialTags, db.rooms, db.inventoryRecords, db.tagPhotos], async () => {
     const rooms = await db.rooms.where('projectId').equals(projectId).toArray()
     const records = await db.inventoryRecords.where('roomId').anyOf(rooms.map((r) => r.id)).toArray()
     for (const record of records) {
@@ -75,6 +88,7 @@ export async function deleteMaterialTagCascade(projectId: string, tagId: string)
         ) as InventoryRecord['categories'],
       })
     }
+    await db.tagPhotos.where('tagId').equals(tagId).delete()
     await db.materialTags.delete(tagId)
   })
 }

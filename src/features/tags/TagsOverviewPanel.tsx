@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, createId, ROOM_CATEGORIES, type MaterialTag, type Room, type RoomCategory } from '../../db'
 import { deleteMaterialTagCascade } from '../data/cascadeDelete'
-import { tagChipStyle } from './colorForValue'
+import { tagChipStyle, nextTagColorIndex } from './colorForValue'
 import { tagLabel } from './tagLabel'
 import { BackIcon } from '../../components/icons'
 import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { confirmDialog } from '../../components/ConfirmDialog'
+import { PhotoGallery } from '../../components/PhotoGallery'
 
 /**
  * Översikt över projektets tagg-bibliotek – en sektion per fast kategori (Golv, Vägg, Tak,
@@ -85,7 +86,7 @@ export function TagsOverviewPanel({
                       <div key={tag.id} className="card tag-card">
                         <button type="button" className="tag-card-open" onClick={() => setEditingTag(tag)}>
                           <span className="tag-card-text">
-                            <span className="tag-chip" style={tagChipStyle(tag.code)}>
+                            <span className="tag-chip" style={tagChipStyle(tag.colorIndex)}>
                               {tagLabel(tag)}
                             </span>
                             <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
@@ -195,7 +196,7 @@ function TagEditSheet({
             category,
             code: trimmedCode,
             description: description.trim(),
-            colorIndex: 0,
+            colorIndex: await nextTagColorIndex(projectId, category),
             createdAt: Date.now(),
           })
         }
@@ -280,6 +281,12 @@ function TagEditSheet({
             )}
           </div>
         )}
+        {tag && (
+          <div className="field">
+            <label>Bilder</label>
+            <TagPhotoGallery tagId={tag.id} />
+          </div>
+        )}
         {saveError && (
           <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
             {saveError}
@@ -302,5 +309,20 @@ function TagEditSheet({
         </div>
       </div>
     </div>
+  )
+}
+
+/** Referensfoton knutna till själva taggen (t.ex. hur "Klinker 2" faktiskt ser ut) – delas av alla
+ * rum som använder taggen. Bara tillgängligt för en redan sparad tagg (se TagEditSheet ovan). */
+function TagPhotoGallery({ tagId }: { tagId: string }) {
+  const photos = useLiveQuery(() => db.tagPhotos.where('tagId').equals(tagId).sortBy('createdAt'), [tagId])
+  return (
+    <PhotoGallery
+      photos={photos}
+      onAdd={(files) =>
+        db.tagPhotos.bulkAdd(Array.from(files).map((file) => ({ id: createId(), tagId, blob: file, createdAt: Date.now() })))
+      }
+      onDelete={(photo) => db.tagPhotos.delete(photo.id)}
+    />
   )
 }

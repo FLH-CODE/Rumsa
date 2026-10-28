@@ -147,6 +147,16 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Tre horisontella linjer – symbolen för att öppna/redigera en anteckning knuten till en
+ * applicerad tagg (se MaterialEntry i InventoryWorkspace.tsx). */
+export function NoteIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 7h16M4 12h16M4 17h10" />
+    </svg>
+  )
+}
+
 export function GripIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props} stroke="none" fill="currentColor">

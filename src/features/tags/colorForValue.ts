@@ -1,7 +1,11 @@
+import { db, type RoomCategory } from '../../db'
+
 /**
- * Distinkta, läsbara färger för materialförslag – samma textvärde ger alltid samma färg.
- * Fler färger ger färre kollisioner mellan olika material (med bara 8 färger möts två av fyra
- * slumpmässiga värden i ~60 % av fallen).
+ * Distinkta, läsbara färger för materialtaggar. Tilldelas per tagg vid skapandet (se
+ * nextTagColorIndex) så att alla taggar inom SAMMA kategori garanterat får olika färg – en
+ * textbaserad hash (tidigare lösning) kunde annars råka ge två olika taggkoder exakt samma färg.
+ * Samma färg kan däremot återanvändas mellan olika kategorier, det är inget problem eftersom en
+ * tagg aldrig visas blandat med en annan kategoris taggar.
  */
 const PALETTE = [
   '#efa30f',
@@ -22,25 +26,31 @@ const PALETTE = [
   '#8e24aa',
 ]
 
-export function colorForValue(value: string): string {
-  const normalized = value.trim().toLowerCase()
-  if (!normalized) return 'transparent'
+export function colorForIndex(colorIndex: number): string {
+  return PALETTE[((colorIndex % PALETTE.length) + PALETTE.length) % PALETTE.length]
+}
 
-  let hash = 0
-  for (let i = 0; i < normalized.length; i++) {
-    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
-  }
-  return PALETTE[hash % PALETTE.length]
+/**
+ * Nästa lediga färgindex bland projektets taggar inom just den kategorin – körs en gång per ny
+ * tagg (se PaletteTagCreate/TagEditSheet), inte vid varje visning, så att en taggs färg sedan
+ * ligger fast oavsett vilka andra taggar som senare skapas eller tas bort.
+ */
+export async function nextTagColorIndex(projectId: string, category: RoomCategory): Promise<number> {
+  const existing = await db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).toArray()
+  const used = new Set(existing.map((t) => t.colorIndex))
+  let index = 0
+  while (used.has(index)) index++
+  return index
 }
 
 /**
  * Taggens egen färg som en läsbar chip-stil (ljus tonad bakgrund + samma färg som text) istället
  * för en liten prick bredvid text – samma mönster återanvänds överallt en tagg visas (taggpalett,
  * applicerat material, taggöversikt), så det alltid går att känna igen en tagg på samma sätt.
- * Fungerar med alla PALETTE-färgerna eftersom de redan är mörka/mättade nog att läsas som text.
+ * `undefined` (t.ex. en borttagen tagg som en referens pekar på) ger en neutral, färglös stil.
  */
-export function tagChipStyle(value: string): { background: string; color: string } {
-  const color = colorForValue(value)
-  if (color === 'transparent') return { background: 'transparent', color: 'inherit' }
+export function tagChipStyle(colorIndex: number | undefined): { background: string; color: string } {
+  if (colorIndex === undefined) return { background: 'transparent', color: 'inherit' }
+  const color = colorForIndex(colorIndex)
   return { background: `${color}1f`, color }
 }

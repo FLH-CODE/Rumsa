@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
-import { db, ROOM_CATEGORIES, type CategoryEntry, type Project, type Room, type RoomPhoto } from '../../db'
+import { db, ROOM_CATEGORIES, type CategoryEntry, type MaterialTag, type Project, type Room, type RoomPhoto, type TagPhoto } from '../../db'
 import { CATEGORY_LABEL } from '../inventory/categories'
 
 const HEADER = [
@@ -22,6 +22,12 @@ const LEGEND_HEADER = ['Kategori', 'Kod', 'Beskrivning']
 function roomFolderName(room: Room): string {
   const label = `${room.roomNumber}${room.roomName ? ` ${room.roomName}` : ''}`.replace(/[\\/:*?"<>|]/g, '').trim()
   return label || room.id
+}
+
+/** Motsvarande för en taggs egen bildmapp, t.ex. "Klinker 2". */
+function tagFolderName(tag: MaterialTag): string {
+  const label = tag.code.replace(/[\\/:*?"<>|]/g, '').trim()
+  return label || tag.id
 }
 
 function photoExtension(blob: Blob): string {
@@ -59,6 +65,14 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     const list = photosByRoomId.get(photo.roomId)
     if (list) list.push(photo)
     else photosByRoomId.set(photo.roomId, [photo])
+  }
+
+  const tagPhotos = await db.tagPhotos.where('tagId').anyOf(tags.map((t) => t.id)).toArray()
+  const tagPhotosByTagId = new Map<string, TagPhoto[]>()
+  for (const photo of tagPhotos) {
+    const list = tagPhotosByTagId.get(photo.tagId)
+    if (list) list.push(photo)
+    else tagPhotosByTagId.set(photo.tagId, [photo])
   }
 
   // Ett rum kopplat till ett typrum exporterar typrummets data (vad kortet faktiskt visar),
@@ -100,7 +114,7 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
     const roomPhotoCount = photosByRoomId.get(room.id)?.length ?? 0
     // Hänvisar till zip-exportens mapp (se roomFolderName) istället för att försöka bädda in
     // bilderna i själva kalkylarket – xlsx-biblioteket som används saknar stöd för det.
-    const photoLabel = roomPhotoCount > 0 ? `${roomPhotoCount} st (Bilder/${roomFolderName(room)})` : ''
+    const photoLabel = roomPhotoCount > 0 ? `${roomPhotoCount} st (Bilder/Rum/${roomFolderName(room)})` : ''
 
     const categoriesWithContent = record
       ? ROOM_CATEGORIES.filter((c) => record.categories[c].materials.length > 0 || record.categories[c].ovrigt.trim())
@@ -175,22 +189,30 @@ export async function exportProjectToExcel(project: Project): Promise<void> {
   const safeName = project.name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Rumsa'
   const xlsxFileName = `${safeName} – inventering ${dateStamp}.xlsx`
 
-  if (photos.length === 0) {
+  if (photos.length === 0 && tagPhotos.length === 0) {
     XLSX.writeFile(workbook, xlsxFileName)
     return
   }
 
-  // Finns det bilder exporteras allt tillsammans som en zip (kalkylarket + en bildmapp per rum) –
-  // xlsx-biblioteket kan inte bädda in bilderna i själva arket, så en separat nedladdning per bild
-  // (eller att bara tappa bort dem helt) hade varit mycket sämre.
+  // Finns det bilder exporteras allt tillsammans som en zip (kalkylarket + en bildmapp per rum och
+  // per tagg) – xlsx-biblioteket kan inte bädda in bilderna i själva arket, så en separat
+  // nedladdning per bild (eller att bara tappa bort dem helt) hade varit mycket sämre.
   const zip = new JSZip()
   const xlsxContent = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
   zip.file(xlsxFileName, xlsxContent)
   for (const room of sortedRooms) {
     const roomPhotos = photosByRoomId.get(room.id)
     if (!roomPhotos || roomPhotos.length === 0) continue
-    const folder = `Bilder/${roomFolderName(room)}`
+    const folder = `Bilder/Rum/${roomFolderName(room)}`
     roomPhotos.forEach((photo, index) => {
+      zip.file(`${folder}/bild-${index + 1}.${photoExtension(photo.blob)}`, photo.blob)
+    })
+  }
+  for (const tag of tags) {
+    const tagPhotoList = tagPhotosByTagId.get(tag.id)
+    if (!tagPhotoList || tagPhotoList.length === 0) continue
+    const folder = `Bilder/Taggar/${tagFolderName(tag)}`
+    tagPhotoList.forEach((photo, index) => {
       zip.file(`${folder}/bild-${index + 1}.${photoExtension(photo.blob)}`, photo.blob)
     })
   }

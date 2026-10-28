@@ -1,5 +1,5 @@
 import type { MaterialTag } from '../../db'
-import { colorForValue } from '../tags/colorForValue'
+import { colorForIndex } from '../tags/colorForValue'
 
 /**
  * Bottensheet för att välja en materialtagg att färglägga rummen efter på ritningen – t.ex. för
@@ -46,7 +46,7 @@ export function TagColorFilterSheet({
                   onClose()
                 }}
               >
-                <span className="material-color-dot" style={{ background: colorForValue(tag.code) }} />
+                <span className="material-color-dot" style={{ background: colorForIndex(tag.colorIndex) }} />
                 {tag.code}
               </button>
             ))}

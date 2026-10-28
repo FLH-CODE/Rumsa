@@ -14,7 +14,7 @@ import { getViewerPosition, setViewerPosition } from '../features/pdf/viewerPosi
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
-import { colorForValue } from '../features/tags/colorForValue'
+import { colorForIndex } from '../features/tags/colorForValue'
 import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon, FullscreenEnterIcon, FullscreenExitIcon } from '../components/icons'
 import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
@@ -222,7 +222,7 @@ export default function DrawingViewerPage() {
           aria-label={filterTag ? `Färgfilter: ${filterTag.code}` : 'Färglägg efter materialtagg'}
         >
           <FilterIcon width={20} height={20} />
-          {filterTag && <span className="viewer-filter-dot" style={{ background: colorForValue(filterTag.code) }} />}
+          {filterTag && <span className="viewer-filter-dot" style={{ background: colorForIndex(filterTag.colorIndex) }} />}
         </button>
         <button
           className="viewer-float-btn"
@@ -326,7 +326,7 @@ export default function DrawingViewerPage() {
                   rooms={rooms ?? []}
                   completedRoomIds={completedRoomIds}
                   highlightRoomIds={highlightRoomIds}
-                  highlightColor={filterTag ? colorForValue(filterTag.code) : undefined}
+                  highlightColor={filterTag ? colorForIndex(filterTag.colorIndex) : undefined}
                   onRoomTap={setSelectedRoom}
                   addMode={addRoomMode}
                   onCanvasTap={(x, y) => void handleCanvasTap(x, y)}

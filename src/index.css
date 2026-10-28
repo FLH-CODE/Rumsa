@@ -1024,7 +1024,7 @@ textarea:focus-visible {
 /* Visar vilket arbetsläge man är i som text, utöver att ikonen/ytan är markerad – annars är
    symbolen den enda indikationen, vilket inte alltid räcker för att vara helt säker. */
 .active-category-label {
-  margin: 0;
+  margin: 0 0 12px;
   font-size: 1rem;
   color: var(--color-text);
 }
@@ -1104,6 +1104,60 @@ textarea:focus-visible {
   gap: 4px;
 }
 
+.material-entry.dragging {
+  opacity: 0.4;
+}
+
+/* Enda delen av raden som faktiskt startar en dragning (se MaterialEntry) – annars skulle ett
+   tryck på anteckningsikonen eller ✕ råka tolkas som att man drar om materialet. */
+.material-entry-grip {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.material-entry-grip:active {
+  cursor: grabbing;
+}
+
+/* Antalsstegare för Utrustning (se MaterialEntry) – plus/minus istället för ett fritt sifferfält,
+   så det går snabbt att bocka av "3 stolar" utan tangentbord. */
+.material-entry-qty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qty-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.qty-btn:active {
+  background: var(--color-bg);
+}
+
+.qty-value {
+  min-width: 1.5em;
+  text-align: center;
+  font-weight: 600;
+}
+
 .material-entry-head {
   display: flex;
   align-items: center;
@@ -1128,6 +1182,24 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: filter 0.1s ease, transform 0.1s ease;
+}
+
+/* Anteckningsikonen – muted/tom som standard, markerad (primärfärg) när en anteckning redan
+   finns, så man ser vilka material som har en anteckning utan att behöva öppna var och en. */
+.material-entry-note-btn {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+}
+
+.material-entry-note-btn.has-note {
+  color: var(--color-primary);
+}
+
+.material-entry-note-btn[aria-pressed='true'] {
+  background: var(--color-bg);
 }
 
 .material-entry-remove {

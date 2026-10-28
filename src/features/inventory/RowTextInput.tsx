@@ -49,6 +49,7 @@ export function RowTextInput({
   inputId,
   multiline = false,
   readOnly = false,
+  autoFocus = false,
 }: {
   projectId: string
   source: SuggestionSource
@@ -58,6 +59,7 @@ export function RowTextInput({
   inputId?: string
   multiline?: boolean
   readOnly?: boolean
+  autoFocus?: boolean
 }) {
   const suggestions = useFieldSuggestions(projectId, source)
   const [open, setOpen] = useState(false)
@@ -81,6 +83,7 @@ export function RowTextInput({
             value={value}
             placeholder={placeholder}
             readOnly={readOnly}
+            autoFocus={autoFocus}
             onChange={(e) => {
               onChange(e.target.value)
               setOpen(true)

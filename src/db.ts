@@ -64,6 +64,10 @@ export interface MaterialReference {
   id: string
   tagId: string
   note: string
+  /** Antal – bara relevant (och bara visat/redigerbart) för Utrustning-kategorin, t.ex. "3 stolar".
+   * `undefined` tolkas som 1 (de allra flesta materialrader, t.ex. golv/väggmaterial, har inget
+   * meningsfullt "antal" alls). */
+  antal?: number
 }
 
 /**
@@ -134,6 +138,15 @@ export interface RoomPhoto {
   createdAt: number
 }
 
+/** Ett referensfoto knutet till själva materialtaggen (t.ex. hur "Klinker 2" faktiskt ser ut) –
+ * delas av alla rum som använder taggen, till skillnad från RoomPhoto som är unikt per rum. */
+export interface TagPhoto {
+  id: string
+  tagId: string
+  blob: Blob
+  createdAt: number
+}
+
 /**
  * Ett typrum – en förinställd uppsättning rumsinfo (samma fält som ett rums InventoryRecord) som
  * valfritt antal rum kan kopplas till istället för att fylla i samma information om och om igen
@@ -163,6 +176,7 @@ class RumsaDB extends Dexie {
   materialTags!: EntityTable<MaterialTag, 'id'>
   roomTypes!: EntityTable<RoomType, 'id'>
   roomPhotos!: EntityTable<RoomPhoto, 'id'>
+  tagPhotos!: EntityTable<TagPhoto, 'id'>
 
   constructor() {
     super('rumsa')
@@ -430,6 +444,31 @@ class RumsaDB extends Dexie {
     this.version(10).stores({
       roomPhotos: 'id, roomId, createdAt',
     })
+
+    // v11: foton knutna till själva materialtaggen (TagPhoto), samt en engångsrättning av
+    // colorIndex – fältet fanns redan men skrevs hittills alltid som en hårdkodad 0, så alla
+    // taggar hamnade på samma färg. Räknas nu om per (projekt, kategori), sorterat på
+    // skapelsedatum för ett stabilt (om än godtyckligt) resultat.
+    this.version(11)
+      .stores({
+        tagPhotos: 'id, tagId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        const tags = await tx.table('materialTags').toArray()
+        const groups = new Map<string, typeof tags>()
+        for (const tag of tags) {
+          const key = `${tag.projectId}::${tag.category}`
+          const list = groups.get(key)
+          if (list) list.push(tag)
+          else groups.set(key, [tag])
+        }
+        for (const group of groups.values()) {
+          group.sort((a, b) => a.createdAt - b.createdAt)
+          for (let i = 0; i < group.length; i++) {
+            await tx.table('materialTags').update(group[i].id, { colorIndex: i })
+          }
+        }
+      })
 
     // Normaliserar varje läst post så att `categories` alltid har alla fem fasta kategorier med
     // giltiga fält, oavsett vad som faktiskt ligger lagrat – t.ex. en flik som hann skriva en post

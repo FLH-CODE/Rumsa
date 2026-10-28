@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -13,14 +13,15 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory, type RoomPhoto } from '../../db'
+import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory } from '../../db'
 import { RowTextInput } from './RowTextInput'
 import { RoomPerspectiveNav } from './RoomPerspectiveNav'
 import { tagLabel } from '../tags/tagLabel'
-import { tagChipStyle } from '../tags/colorForValue'
+import { tagChipStyle, nextTagColorIndex } from '../tags/colorForValue'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { confirmOnEnterEscape, blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
-import { CameraIcon } from '../../components/icons'
+import { NoteIcon, GripIcon } from '../../components/icons'
+import { PhotoGallery } from '../../components/PhotoGallery'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
 
 type DropIndicator = { category: RoomCategory; index: number }
@@ -66,7 +67,10 @@ export function InventoryWorkspace({
   // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
   // när arbetsytan faktiskt hör till ett riktigt rum.
   const railTabs = roomId ? RAIL_TABS : RAIL_TABS.filter((tab) => tab !== 'bilder')
-  const [activeDragTag, setActiveDragTag] = useState<MaterialTag | null>(null)
+  // 'tag' = en ny tagg dras in från paletten (se insertMaterial), 'material' = ett redan applicerat
+  // material dras om inom sin egen lista (se moveMaterial). `tag` kan vara undefined för 'material'
+  // om taggen det syftar på råkat tas bort (visar då "Okänd tagg", se tagLabel).
+  const [activeDrag, setActiveDrag] = useState<{ kind: 'tag' | 'material'; tag: MaterialTag | undefined } | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
   // Styrs här (inte lokalt i TagPalette) så att innehållet till vänster om det vertikala
   // strecket kan tonas ner medan man skapar en ny tagg.
@@ -98,6 +102,26 @@ export function InventoryWorkspace({
       materials: entry.materials.map((m) => (m.id === refId ? { ...m, note } : m)),
     }))
 
+  const updateMaterialAntal = (category: RoomCategory, refId: string, antal: number) =>
+    setCategoryEntry(category, (entry) => ({
+      ...entry,
+      materials: entry.materials.map((m) => (m.id === refId ? { ...m, antal: Math.max(1, antal) } : m)),
+    }))
+
+  // Flyttar ett REDAN applicerat material till ett nytt index inom samma kategori – skiljs från
+  // insertMaterial (som lägger till ett nytt material från paletten) i handleDragEnd via
+  // data.type ('material' kontra 'tag').
+  const moveMaterial = (category: RoomCategory, fromIndex: number, toIndex: number) =>
+    setCategoryEntry(category, (entry) => {
+      const materials = [...entry.materials]
+      const [moved] = materials.splice(fromIndex, 1)
+      // Index:et som indikatorn pekar på räknas i listan FÖRE flytten – har materialet redan
+      // plockats bort från en tidigare position krymper allt efter den med ett steg.
+      const insertAt = Math.max(0, Math.min(fromIndex < toIndex ? toIndex - 1 : toIndex, materials.length))
+      materials.splice(insertAt, 0, moved)
+      return { ...entry, materials }
+    })
+
   const removeMaterial = async (category: RoomCategory, ref: MaterialReference, tag: MaterialTag | undefined) => {
     if (!(await confirmDialog(`Ta bort ${tagLabel(tag)}?`, { danger: true }))) return
     setCategoryEntry(category, (entry) => ({ ...entry, materials: entry.materials.filter((m) => m.id !== ref.id) }))
@@ -107,15 +131,17 @@ export function InventoryWorkspace({
 
   const handleDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current
-    if (data?.type === 'tag') setActiveDragTag(data.tag as MaterialTag)
+    if (data?.type === 'tag') setActiveDrag({ kind: 'tag', tag: data.tag as MaterialTag })
+    else if (data?.type === 'material') setActiveDrag({ kind: 'material', tag: data.tag as MaterialTag | undefined })
   }
 
-  // Visar exakt VAR taggen hamnar om man släpper nu (en tunn linje mellan två befintliga
-  // material) istället för att bara tona hela listan – annars var det otydligt om släppet skulle
-  // lägga till taggen sist, infogas någonstans mitt i, eller inget alls.
+  // Visar exakt VAR taggen (eller det omflyttade materialet) hamnar om man släpper nu (en tunn
+  // linje mellan två befintliga material) istället för att bara tona hela listan – annars var det
+  // otydligt om släppet skulle lägga till/flytta taggen sist, in någonstans mitt i, eller inget alls.
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
-    if (!over || active.data.current?.type !== 'tag') {
+    const activeType = active.data.current?.type
+    if (!over || (activeType !== 'tag' && activeType !== 'material')) {
       setDropIndicator(null)
       return
     }
@@ -137,12 +163,16 @@ export function InventoryWorkspace({
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragTag(null)
+    setActiveDrag(null)
     const indicator = dropIndicator
     setDropIndicator(null)
     const activeData = event.active.data.current
-    if (activeData?.type !== 'tag' || !indicator) return
-    insertMaterial(indicator.category, indicator.index, activeData.tag as MaterialTag)
+    if (!indicator) return
+    if (activeData?.type === 'tag') {
+      insertMaterial(indicator.category, indicator.index, activeData.tag as MaterialTag)
+    } else if (activeData?.type === 'material' && typeof activeData.sourceIndex === 'number' && activeData.category === indicator.category) {
+      moveMaterial(indicator.category, activeData.sourceIndex as number, indicator.index)
+    }
   }
 
   return (
@@ -153,7 +183,7 @@ export function InventoryWorkspace({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={() => {
-        setActiveDragTag(null)
+        setActiveDrag(null)
         setDropIndicator(null)
       }}
     >
@@ -227,7 +257,7 @@ export function InventoryWorkspace({
                 </div>
               )
             ) : activeTab === 'bilder' ? (
-              roomId && <PhotoGallery roomId={roomId} />
+              roomId && <RoomPhotoGallery roomId={roomId} />
             ) : (
               <CategoryContent
                 key={activeTab}
@@ -238,6 +268,7 @@ export function InventoryWorkspace({
                 dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
                 onRemoveMaterial={(ref, tag) => void removeMaterial(activeTab, ref, tag)}
                 onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
+                onAntalChange={(refId, antal) => updateMaterialAntal(activeTab, refId, antal)}
                 onOvrigtChange={(value) => updateOvrigt(activeTab, value)}
               />
             )}
@@ -258,9 +289,9 @@ export function InventoryWorkspace({
       </div>
 
       <DragOverlay>
-        {activeDragTag && (
-          <span className="tag-chip drag-preview" style={tagChipStyle(activeDragTag.code)}>
-            {activeDragTag.code}
+        {activeDrag && (
+          <span className="tag-chip drag-preview" style={tagChipStyle(activeDrag.tag?.colorIndex)}>
+            {tagLabel(activeDrag.tag)}
           </span>
         )}
       </DragOverlay>
@@ -327,6 +358,7 @@ function CategoryContent({
   dropIndicatorIndex,
   onRemoveMaterial,
   onNoteChange,
+  onAntalChange,
   onOvrigtChange,
 }: {
   category: RoomCategory
@@ -336,6 +368,7 @@ function CategoryContent({
   dropIndicatorIndex: number | null
   onRemoveMaterial: (ref: MaterialReference, tag: MaterialTag | undefined) => void
   onNoteChange: (refId: string, note: string) => void
+  onAntalChange: (refId: string, antal: number) => void
   onOvrigtChange: (value: string) => void
 }) {
   const tags = useLiveQuery(
@@ -365,6 +398,7 @@ function CategoryContent({
               readOnly={readOnly}
               onRemove={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
               onNoteChange={(value) => onNoteChange(ref.id, value)}
+              onAntalChange={(antal) => onAntalChange(ref.id, antal)}
             />
           </Fragment>
         ))}
@@ -393,60 +427,16 @@ function CategoryContent({
 /** Foton knutna till rummet – tagna direkt med kameran (på mobil, via `capture`) eller valda ur
  * galleriet. Oberoende av `readOnly`: ett foto visar det faktiska rummet och ska gå att lägga
  * till/ta bort även när rummet är kopplat till ett typrum (vars data annars är skrivskyddad). */
-function PhotoGallery({ roomId }: { roomId: string }) {
+function RoomPhotoGallery({ roomId }: { roomId: string }) {
   const photos = useLiveQuery(() => db.roomPhotos.where('roomId').equals(roomId).sortBy('createdAt'), [roomId])
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const handleFilesSelected = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    await db.roomPhotos.bulkAdd(
-      Array.from(files).map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })),
-    )
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const handleDelete = async (photoId: string) => {
-    if (!(await confirmDialog('Ta bort bilden?', { danger: true }))) return
-    await db.roomPhotos.delete(photoId)
-  }
-
   return (
-    <div className="photo-gallery">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        multiple
-        style={{ display: 'none' }}
-        onChange={(e) => void handleFilesSelected(e.target.files)}
-      />
-      <button type="button" className="btn btn-secondary photo-add-btn" onClick={() => fileInputRef.current?.click()}>
-        <CameraIcon width={18} height={18} /> Ta bild
-      </button>
-      {photos === undefined ? null : photos.length === 0 ? (
-        <p className="field-hint category-empty">Inga bilder ännu.</p>
-      ) : (
-        <div className="photo-grid">
-          {photos.map((photo) => (
-            <PhotoThumb key={photo.id} photo={photo} onDelete={() => void handleDelete(photo.id)} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PhotoThumb({ photo, onDelete }: { photo: RoomPhoto; onDelete: () => void }) {
-  const url = useMemo(() => URL.createObjectURL(photo.blob), [photo.blob])
-  useEffect(() => () => URL.revokeObjectURL(url), [url])
-  return (
-    <div className="photo-thumb">
-      <img src={url} alt="" />
-      <button type="button" className="material-entry-remove photo-thumb-remove" onClick={onDelete} aria-label="Ta bort bild">
-        ✕
-      </button>
-    </div>
+    <PhotoGallery
+      photos={photos}
+      onAdd={(files) =>
+        db.roomPhotos.bulkAdd(Array.from(files).map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })))
+      }
+      onDelete={(photo) => db.roomPhotos.delete(photo.id)}
+    />
   )
 }
 
@@ -462,6 +452,7 @@ function MaterialEntry({
   readOnly,
   onRemove,
   onNoteChange,
+  onAntalChange,
 }: {
   index: number
   category: RoomCategory
@@ -471,31 +462,83 @@ function MaterialEntry({
   readOnly: boolean
   onRemove: () => void
   onNoteChange: (value: string) => void
+  onAntalChange: (antal: number) => void
 }) {
-  const { setNodeRef } = useDroppable({
+  const { setNodeRef: setDroppableRef } = useDroppable({
     id: `slot-${category}-${reference.id}`,
     data: { type: 'slot', category, index },
     disabled: readOnly,
   })
+  // Draghandtaget (GripIcon) är den enda delen av raden som faktiskt startar en dragning – annars
+  // skulle ett tryck på anteckningsikonen eller ✕ råka tolkas som att man börjat dra om materialet.
+  const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({
+    id: `entry-${reference.id}`,
+    data: { type: 'material', category, sourceIndex: index, tag },
+    disabled: readOnly,
+  })
+  // Anteckningsfältet är dolt (ingen behållare) i normalläget – bara ikonen visar att en
+  // anteckning finns/går att lägga till. Tryck på ikonen för att fälla ut redigeringsfältet.
+  const [editingNote, setEditingNote] = useState(false)
+  const hasNote = reference.note.trim().length > 0
+  const antal = reference.antal ?? 1
+
   return (
-    <div ref={setNodeRef} className="material-entry">
+    <div
+      ref={(node) => {
+        setDroppableRef(node)
+        setDraggableRef(node)
+      }}
+      className={`material-entry${isDragging ? ' dragging' : ''}`}
+    >
       <div className="material-entry-head">
-        <span className="tag-chip" style={tagChipStyle(tag?.code ?? '')}>
+        {!readOnly && (
+          <button type="button" className="material-entry-grip" aria-label="Dra för att ändra ordning" {...attributes} {...listeners}>
+            <GripIcon width={16} height={16} />
+          </button>
+        )}
+        <span className="tag-chip" style={tagChipStyle(tag?.colorIndex)}>
           {tagLabel(tag)}
         </span>
         {!readOnly && (
-          <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
-            ✕
-          </button>
+          <>
+            <button
+              type="button"
+              className={`material-entry-note-btn${hasNote ? ' has-note' : ''}`}
+              onClick={() => setEditingNote((prev) => !prev)}
+              aria-pressed={editingNote}
+              aria-label={hasNote ? 'Redigera anteckning' : 'Lägg till anteckning'}
+            >
+              <NoteIcon width={16} height={16} />
+            </button>
+            <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
+              ✕
+            </button>
+          </>
         )}
       </div>
-      {readOnly ? (
-        reference.note.trim() && <p className="field-static-value material-entry-note">{reference.note}</p>
+      {category === 'utrustning' &&
+        (readOnly ? (
+          antal > 1 && <p className="field-static-value material-entry-note">Antal: {antal}</p>
+        ) : (
+          <div className="material-entry-qty">
+            <span className="field-hint">Antal</span>
+            <button type="button" className="qty-btn" onClick={() => onAntalChange(antal - 1)} aria-label="Minska antal">
+              −
+            </button>
+            <span className="qty-value">{antal}</span>
+            <button type="button" className="qty-btn" onClick={() => onAntalChange(antal + 1)} aria-label="Öka antal">
+              +
+            </button>
+          </div>
+        ))}
+      {readOnly || !editingNote ? (
+        hasNote && <p className="field-static-value material-entry-note">{reference.note}</p>
       ) : (
         <RowTextInput
           projectId={projectId}
           source="materialNote"
           multiline
+          autoFocus
           value={reference.note}
           onChange={onNoteChange}
           placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
@@ -568,7 +611,7 @@ function PaletteTag({ tag, onPick }: { tag: MaterialTag; onPick: () => void }) {
       {...listeners}
     >
       <span className="palette-tag-text">
-        <span className="tag-chip" style={tagChipStyle(tag.code)}>
+        <span className="tag-chip" style={tagChipStyle(tag.colorIndex)}>
           {tag.code}
         </span>
         {tag.description && <span className="field-hint">{tag.description}</span>}
@@ -613,7 +656,7 @@ function PaletteTagCreate({
           category,
           code: trimmed,
           description: description.trim(),
-          colorIndex: 0,
+          colorIndex: await nextTagColorIndex(projectId, category),
           createdAt: Date.now(),
         })
       })
