@@ -269,14 +269,19 @@ textarea:focus-visible {
   padding: 48px 16px;
 }
 
+/* Ankrad uppe (med lite marginal till överkant) istället för nere – en botten-sheet hamnade annars
+   mitt bakom mobilens/plattans tangentbord så fort man tryckte i ett textfält, med knapp avstånd
+   kvar till det man faktiskt skrev i. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(10, 20, 24, 0.45);
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: calc(28px + var(--safe-top));
   z-index: 100;
+  overflow-y: auto;
 }
 
 /* Egen, liten bekräftelsedialog (se components/ConfirmDialog.tsx) som ersätter webbläsarens
@@ -317,24 +322,19 @@ textarea:focus-visible {
   max-width: 480px;
   background: var(--color-surface);
   color: var(--color-text);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--radius-lg);
   padding: 20px 16px calc(20px + var(--safe-bottom));
   display: flex;
   flex-direction: column;
   gap: 14px;
   max-height: 85vh;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
-/* På bredare skärmar (surfplatta liggande/dator) känns en botten-anchored sheet malplacerad –
-   visa den som en centrerad dialog istället, som på mobilt är det tummen når bäst. */
+/* Lite rymligare padding när det finns gott om bredd. */
 @media (min-width: 640px) {
-  .modal-backdrop {
-    align-items: center;
-  }
-
   .modal-sheet {
-    border-radius: var(--radius-lg);
     padding: 20px;
   }
 }
@@ -808,10 +808,10 @@ textarea:focus-visible {
 /* --- Inventeringsformulär --- */
 
 /* Fast höjd (inte bara ett max) så att kortets höjd – och därmed var dess överkant hamnar när
-   bakgrunden centrerar sheeten (se @media min-width:640px ovan) – aldrig ändras när man växlar
-   mellan arbetslägen med olika mängd innehåll. Annars hoppade rubrik/ikonrad upp och ner i takt
-   med att kortet växte/krympte för varje flik. Mobilens egna 100dvh (se nedan) tar över igen på
-   smala skärmar, där kortet redan är fast förankrat i hela skärmens höjd. */
+   bakgrunden (.modal-backdrop, toppankrad med fast marginal) placerar sheeten – aldrig ändras när
+   man växlar mellan arbetslägen med olika mängd innehåll. Annars hoppade rubrik/ikonrad upp och
+   ner i takt med att kortet växte/krympte för varje flik. Mobilens egna 100dvh (se nedan) tar över
+   igen på smala skärmar, där kortet redan är fast förankrat i hela skärmens höjd. */
 .inventory-sheet {
   width: 100%;
   max-width: 560px;
@@ -1109,11 +1109,12 @@ textarea:focus-visible {
 }
 
 /* Enda delen av raden som faktiskt startar en dragning (se MaterialEntry) – annars skulle ett
-   tryck på anteckningsikonen eller ✕ råka tolkas som att man drar om materialet. */
+   tryck på anteckningsikonen eller ✕ råka tolkas som att man drar om materialet. Samma storlek som
+   anteckningsikonen/✕ (28px) så alla symboler på raden ligger i jämn höjd/rytm. */
 .material-entry-grip {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1124,6 +1125,19 @@ textarea:focus-visible {
 
 .material-entry-grip:active {
   cursor: grabbing;
+}
+
+.material-entry-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Indragen i jämnhöjd med taggchipet – som annars börjar en bit in (efter draghandtaget) medan
+   anteckningen/antalet under låg kvar vid vänsterkanten. Gäller bara när draghandtaget faktiskt
+   syns (dvs. inte skrivskyddat läge, som saknar det helt). */
+.material-entry-detail.indented {
+  margin-left: 36px;
 }
 
 /* Antalsstegare för Utrustning (se MaterialEntry) – plus/minus istället för ett fritt sifferfält,
@@ -1198,8 +1212,9 @@ textarea:focus-visible {
   color: var(--color-primary);
 }
 
-.material-entry-note-btn[aria-pressed='true'] {
-  background: var(--color-bg);
+.material-entry-note-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .material-entry-remove {
@@ -1369,7 +1384,15 @@ textarea:focus-visible {
   background: var(--color-bg);
 }
 
-.photo-thumb img {
+.photo-thumb-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+}
+
+.photo-thumb-open img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1387,6 +1410,40 @@ textarea:focus-visible {
 .photo-thumb-remove:active {
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
+}
+
+/* Fotot i storformat ovanpå allt annat (z-index över taggöversiktens 150 och bekräftelsedialogens
+   300) – man ska alltid kunna se en bild i stort oavsett vilket lager galleriet själv öppnats i. */
+.photo-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 400;
+}
+
+.photo-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: calc(16px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* --- Materialförslag --- */

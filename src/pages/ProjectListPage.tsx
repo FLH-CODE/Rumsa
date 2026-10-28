@@ -5,6 +5,7 @@ import { db, createId, type Project } from '../db'
 import { deleteProjectCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
+import { FullscreenButton } from '../components/FullscreenButton'
 import { TrashIcon, ChevronRightIcon, PlusIcon, ExportIcon } from '../components/icons'
 
 export default function ProjectListPage() {
@@ -38,15 +39,18 @@ export default function ProjectListPage() {
     <>
       <header className="app-header">
         <h1>Rumsa</h1>
-        <button
-          className="btn-ghost btn tap-target"
-          onClick={() => void handleBackup()}
-          disabled={backingUp}
-          aria-label={backingUp ? 'Skapar säkerhetskopia…' : 'Säkerhetskopiera all data'}
-          title="Säkerhetskopiera all data"
-        >
-          <ExportIcon width={20} height={20} />
-        </button>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <FullscreenButton />
+          <button
+            className="btn-ghost btn tap-target"
+            onClick={() => void handleBackup()}
+            disabled={backingUp}
+            aria-label={backingUp ? 'Skapar säkerhetskopia…' : 'Säkerhetskopiera all data'}
+            title="Säkerhetskopiera all data"
+          >
+            <ExportIcon width={20} height={20} />
+          </button>
+        </div>
       </header>
       <main className="app-main">
         <div className="card-list">

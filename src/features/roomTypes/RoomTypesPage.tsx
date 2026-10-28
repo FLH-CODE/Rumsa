@@ -8,6 +8,7 @@ import { deleteRoomTypeCascade, deleteMaterialTagCascade } from '../data/cascade
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { BackIcon } from '../../components/icons'
+import { FullscreenButton } from '../../components/FullscreenButton'
 
 /**
  * Typrum – förinställd rumsinfo som valfritt antal rum kan kopplas till (se RoomInventorySheet)
@@ -59,7 +60,7 @@ export default function RoomTypesPage() {
           <BackIcon />
         </button>
         <h1 style={{ fontSize: '1.05rem' }}>Typrum</h1>
-        <span className="tap-target" aria-hidden="true" />
+        <FullscreenButton className="btn-ghost btn tap-target" />
       </header>
       <main className="app-main">
         {roomTypes === undefined ? null : roomTypes.length === 0 ? (
@@ -184,7 +185,10 @@ function RoomTypeEditSheet({
               value={name}
               placeholder="Namn på typrum"
               enterKeyHint="done"
-              autoFocus
+              // Bara för ett nyss skapat, ännu onamngivet typrum – inte när man öppnar ett
+              // befintligt för att bara granska/lägga till bilder, då ska inte tangentbordet
+              // poppa upp i onödan.
+              autoFocus={!roomType.name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={blurOnEnterEscape}
               aria-label="Namn på typrum"

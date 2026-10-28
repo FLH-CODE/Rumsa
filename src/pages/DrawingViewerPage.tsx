@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -15,12 +15,14 @@ import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForIndex } from '../features/tags/colorForValue'
-import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon, FullscreenEnterIcon, FullscreenExitIcon } from '../components/icons'
+import { FullscreenButton } from '../components/FullscreenButton'
+import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
 import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
 export default function DrawingViewerPage() {
   const { projectId, drawingPageId } = useParams<{ projectId: string; drawingPageId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   // Öppen som standard på bredare skärmar, stängd på mobil där panelen annars tar en stor del
   // av en redan liten yta.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
@@ -36,29 +38,7 @@ export default function DrawingViewerPage() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
   const [renamingLevel, setRenamingLevel] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
   const pageSortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
-
-  // Manifestets display:"fullscreen" gäller bara en genväg man lagt till på hemskärmen – i en
-  // vanlig öppen webbläsarflik (som den man ser i en vanlig Chrome-flik) går det inte att dölja
-  // adressfältet utan att användaren själv aktivt begär helskärm, därav knappen. Lyssnar på
-  // fullscreenchange också, så ikonen stämmer om man lämnar helskärm med Esc/systemets tillbaka.
-  useEffect(() => {
-    const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
-    document.addEventListener('fullscreenchange', handleChange)
-    return () => document.removeEventListener('fullscreenchange', handleChange)
-  }, [])
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen()
-    } else {
-      void document.documentElement.requestFullscreen().catch(() => {
-        // Vissa webbläsare (t.ex. iOS Safari) saknar stöd för Fullscreen API helt – då finns
-        // ingen bättre reserv än att låta adressfältet synas kvar.
-      })
-    }
-  }
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -77,6 +57,25 @@ export default function DrawingViewerPage() {
     () => (currentPage ? db.rooms.where('drawingPageId').equals(currentPage.id).toArray() : []),
     [currentPage?.id],
   )
+  // Öppnar rummets kort automatiskt om man navigerat hit via "Används i" i en taggs redigeringsyta
+  // (se TagsPage.tsx) – annars hade man bara hamnat på rätt ritningssida utan att faktiskt se
+  // rummet man ville titta på.
+  const openRoomId = (location.state as { openRoomId?: string } | null)?.openRoomId
+  useEffect(() => {
+    // `currentPage` måste vara inläst (inte bara `rooms`) innan man litar på listan – annars
+    // special-faller `rooms`-frågan tillbaka till en tom array redan innan sidan ens hunnit
+    // läsas in, vilket fick effekten att tro att rummet inte fanns och nollställa
+    // navigeringstillståndet för tidigt (innan den riktiga listan hunnit komma).
+    if (!openRoomId || !currentPage || !rooms) return
+    const room = rooms.find((r) => r.id === openRoomId)
+    // Hittas inget (ännu) – vänta istället för att nollställa navigeringstillståndet; `rooms` kan
+    // fortfarande vara en kvarbliven tom lista från innan `currentPage` var inläst.
+    if (!room) return
+    setSelectedRoom(room)
+    navigate(location.pathname, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRoomId, currentPage, rooms])
+
   const roomIdsKey = (rooms ?? []).map((r) => r.id).join(',')
   const records = useLiveQuery(
     () => db.inventoryRecords.where('roomId').anyOf(roomIdsKey ? roomIdsKey.split(',') : []).toArray(),
@@ -227,17 +226,11 @@ export default function DrawingViewerPage() {
         <button
           className="viewer-float-btn"
           onClick={() => setShowTagsOverview(true)}
-          aria-label="Materialtaggar"
+          aria-label="Material och inventarier"
         >
           <TagIcon width={20} height={20} />
         </button>
-        <button
-          className="viewer-float-btn"
-          onClick={toggleFullscreen}
-          aria-label={isFullscreen ? 'Avsluta helskärm' : 'Helskärm'}
-        >
-          {isFullscreen ? <FullscreenExitIcon width={20} height={20} /> : <FullscreenEnterIcon width={20} height={20} />}
-        </button>
+        <FullscreenButton className="viewer-float-btn" />
       </div>
       {/* Flik i vänsterkanten, som ett bokmärke man drar ut/in – istället för en knapp bland de
          andra, så den tydligt hör ihop med sidlistan den styr. Pilen pekar åt det håll listan

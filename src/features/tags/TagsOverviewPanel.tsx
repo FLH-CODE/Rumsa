@@ -9,6 +9,7 @@ import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { PhotoGallery } from '../../components/PhotoGallery'
+import { FullscreenButton } from '../../components/FullscreenButton'
 
 /**
  * Översikt över projektets tagg-bibliotek – en sektion per fast kategori (Golv, Vägg, Tak,
@@ -67,8 +68,8 @@ export function TagsOverviewPanel({
         <button className="btn-ghost btn tap-target" onClick={onClose} aria-label="Tillbaka">
           <BackIcon />
         </button>
-        <h1 style={{ fontSize: '1.05rem' }}>Taggar</h1>
-        <span className="tap-target" aria-hidden="true" />
+        <h1 style={{ fontSize: '1.05rem' }}>Material och inventarier</h1>
+        <FullscreenButton className="btn-ghost btn tap-target" />
       </header>
       <main className="app-main">
         {ROOM_CATEGORIES.map((category) => {
@@ -231,7 +232,9 @@ function TagEditSheet({
           <label htmlFor="tag-code">Kod</label>
           <input
             id="tag-code"
-            autoFocus
+            // Bara vid skapande – inte när man öppnar en befintlig tagg för att bara granska den
+            // (t.ex. kolla bilder/"Används i"), då ska inte tangentbordet poppa upp i onödan.
+            autoFocus={!tag}
             enterKeyHint="done"
             value={code}
             onChange={(e) => setCode(e.target.value)}

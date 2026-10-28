@@ -9,6 +9,7 @@ import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
+import { FullscreenButton } from '../components/FullscreenButton'
 import {
   FloorPlanIcon,
   DrawingIcon,
@@ -186,6 +187,7 @@ export default function ProjectDetailPage() {
           }}
         />
         <span className="save-dot" data-status={status} aria-hidden="true" />
+        <FullscreenButton />
       </header>
       <main className="app-main project-detail">
         <button
@@ -256,10 +258,10 @@ export default function ProjectDetailPage() {
           <button
             className="settings-list-item"
             onClick={() => navigate(`/project/${projectId}/tags`)}
-            aria-label={`Materialtaggar, ${tagCount ?? 0} st`}
+            aria-label={`Material och inventarier, ${tagCount ?? 0} st`}
           >
             <TagIcon className="settings-list-icon" />
-            <span className="settings-list-label">Materialtaggar</span>
+            <span className="settings-list-label">Material och inventarier</span>
             <span className="settings-list-value">{tagCount ?? 0}</span>
             <ChevronRightIcon className="settings-list-chevron" />
           </button>

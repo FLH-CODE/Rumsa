@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -476,17 +476,31 @@ function MaterialEntry({
     data: { type: 'material', category, sourceIndex: index, tag },
     disabled: readOnly,
   })
-  // Anteckningsfältet är dolt (ingen behållare) i normalläget – bara ikonen visar att en
-  // anteckning finns/går att lägga till. Tryck på ikonen för att fälla ut redigeringsfältet.
+  // Anteckningen är alltid synlig som vanlig text – bara ikonen (de tre linjerna) fäller ut
+  // redigeringsfältet. Ett klick utanför hela raden stänger redigeringsläget igen (texten som
+  // redan skrivits in ligger ändå kvar – den sparas som vanligt när rumskortet stängs med Klar).
   const [editingNote, setEditingNote] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const hasNote = reference.note.trim().length > 0
   const antal = reference.antal ?? 1
+
+  useEffect(() => {
+    if (!editingNote) return
+    const handlePointerDown = (e: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setEditingNote(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [editingNote])
 
   return (
     <div
       ref={(node) => {
         setDroppableRef(node)
         setDraggableRef(node)
+        containerRef.current = node
       }}
       className={`material-entry${isDragging ? ' dragging' : ''}`}
     >
@@ -505,7 +519,6 @@ function MaterialEntry({
               type="button"
               className={`material-entry-note-btn${hasNote ? ' has-note' : ''}`}
               onClick={() => setEditingNote((prev) => !prev)}
-              aria-pressed={editingNote}
               aria-label={hasNote ? 'Redigera anteckning' : 'Lägg till anteckning'}
             >
               <NoteIcon width={16} height={16} />
@@ -516,34 +529,42 @@ function MaterialEntry({
           </>
         )}
       </div>
-      {category === 'utrustning' &&
-        (readOnly ? (
-          antal > 1 && <p className="field-static-value material-entry-note">Antal: {antal}</p>
+      {/* Indragen i jämnhöjd med taggchipet ovanför (inte raden som helhet, som annars börjar vid
+         draghandtaget längre till vänster). */}
+      <div className={`material-entry-detail${readOnly ? '' : ' indented'}`}>
+        {category === 'utrustning' &&
+          (readOnly ? (
+            antal > 1 && <p className="field-static-value material-entry-note">Antal: {antal}</p>
+          ) : (
+            <div className="material-entry-qty">
+              <span className="field-hint">Antal</span>
+              <button type="button" className="qty-btn" onClick={() => onAntalChange(antal - 1)} aria-label="Minska antal">
+                −
+              </button>
+              <span className="qty-value">{antal}</span>
+              <button type="button" className="qty-btn" onClick={() => onAntalChange(antal + 1)} aria-label="Öka antal">
+                +
+              </button>
+            </div>
+          ))}
+        {readOnly ? (
+          hasNote && <p className="field-static-value material-entry-note">{reference.note}</p>
+        ) : editingNote ? (
+          <RowTextInput
+            projectId={projectId}
+            source="materialNote"
+            multiline
+            autoFocus
+            value={reference.note}
+            onChange={onNoteChange}
+            placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
+          />
         ) : (
-          <div className="material-entry-qty">
-            <span className="field-hint">Antal</span>
-            <button type="button" className="qty-btn" onClick={() => onAntalChange(antal - 1)} aria-label="Minska antal">
-              −
-            </button>
-            <span className="qty-value">{antal}</span>
-            <button type="button" className="qty-btn" onClick={() => onAntalChange(antal + 1)} aria-label="Öka antal">
-              +
-            </button>
-          </div>
-        ))}
-      {readOnly || !editingNote ? (
-        hasNote && <p className="field-static-value material-entry-note">{reference.note}</p>
-      ) : (
-        <RowTextInput
-          projectId={projectId}
-          source="materialNote"
-          multiline
-          autoFocus
-          value={reference.note}
-          onChange={onNoteChange}
-          placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
-        />
-      )}
+          <p className={`field-static-value material-entry-note${hasNote ? '' : ' material-entry-note-empty'}`}>
+            {hasNote ? reference.note : 'Ingen anteckning'}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
