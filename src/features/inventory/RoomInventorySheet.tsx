@@ -8,7 +8,7 @@ import { deleteRoomCascade, deleteMaterialTagCascade } from '../data/cascadeDele
 import { linkRoomToType, unlinkRoomFromType } from './roomTypeLink'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { LinkIcon, LinkOffIcon } from '../../components/icons'
+import { LinkIcon, LinkOffIcon, EraserIcon } from '../../components/icons'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -166,13 +166,21 @@ export function RoomInventorySheet({
   }
 
   const handleUnlinkType = async () => {
-    if (!linkedType) return
+    if (!linkedType || !record) return
     await unlinkRoomFromType(room, linkedType)
     // unlinkRoomFromType skriver typrummets data direkt till rummets egen (oförändrade)
     // inventeringspost – samma post-id som innan, så effekten som annars synkar `loaded` från
-    // `record` (styrd av att post-id:t ändras) triggar inte av sig själv. Nollställs här så att
-    // den omedelbart hämtar den precis skrivna datan istället för att visa den gamla, tomma.
-    setLoaded(null)
+    // `record` (styrd av att post-id:t ändras) triggar inte av sig själv. Sätts direkt till den
+    // data vi just skrev istället för att nollställas och vänta på att liveQuery:n hinner ikapp –
+    // det race:et kunde annars lämna kortet fast på "Laddar…".
+    setLoaded({
+      recordId: record.id,
+      categories: linkedType.categories,
+      antalPersoner: linkedType.antalPersoner,
+      funktionsbeskrivning: linkedType.funktionsbeskrivning,
+      dagsljus: linkedType.dagsljus,
+      storlek: linkedType.storlek,
+    })
     setShowTypeMenu(false)
   }
 
@@ -182,16 +190,16 @@ export function RoomInventorySheet({
       danger: true,
     })
     if (!confirmed) return
-    await db.inventoryRecords.update(record.id, {
+    const cleared = {
       categories: emptyCategories(),
       antalPersoner: '',
       funktionsbeskrivning: '',
       dagsljus: '',
       storlek: '',
-      updatedAt: Date.now(),
-    })
-    setLoaded(null)
-    setShowTypeMenu(false)
+    }
+    await db.inventoryRecords.update(record.id, { ...cleared, updatedAt: Date.now() })
+    // Se handleUnlinkType ovan – satt direkt istället för nollställd, av samma anledning.
+    setLoaded({ recordId: record.id, ...cleared })
   }
 
   // Ett rum kopplat till ett typrum visar alltid typrummets data, aldrig rummets egen (dolda och
@@ -233,6 +241,17 @@ export function RoomInventorySheet({
             {linkedType && <span className="room-type-badge">Typrum: {linkedType.name}</span>}
           </div>
           <div className="inventory-sheet-header-actions">
+            {!linkedType && (
+              <button
+                type="button"
+                className="btn-ghost btn tap-target"
+                onClick={() => void handleClearRoomData()}
+                aria-label="Rensa rumsdata"
+                title="Rensa rumsdata"
+              >
+                <EraserIcon width={20} height={20} />
+              </button>
+            )}
             <button
               type="button"
               className="btn-ghost btn tap-target room-type-link-btn"
@@ -277,9 +296,6 @@ export function RoomInventorySheet({
                     ))}
                   </div>
                 )}
-                <button type="button" className="btn" style={{ color: 'var(--color-danger)' }} onClick={() => void handleClearRoomData()}>
-                  Rensa rumsdata
-                </button>
               </>
             )}
           </div>

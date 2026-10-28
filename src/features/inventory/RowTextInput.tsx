@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db'
 import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
@@ -50,6 +50,8 @@ export function RowTextInput({
   multiline = false,
   readOnly = false,
   autoFocus = false,
+  bare = false,
+  onBlurCapture,
 }: {
   projectId: string
   source: SuggestionSource
@@ -60,6 +62,11 @@ export function RowTextInput({
   multiline?: boolean
   readOnly?: boolean
   autoFocus?: boolean
+  /** Ingen behållare (kant/bakgrund) och ingen fast höjd/scrollbar – textarean växer istället med
+   * innehållet, så hela texten alltid syns direkt. Används där redigering ska kännas som att man
+   * klickar rakt i den vanliga texten istället för att öppna ett separat textfält. */
+  bare?: boolean
+  onBlurCapture?: () => void
 }) {
   const suggestions = useFieldSuggestions(projectId, source)
   const [open, setOpen] = useState(false)
@@ -72,14 +79,22 @@ export function RowTextInput({
     return list.slice(0, MAX_SUGGESTIONS)
   }, [suggestions, value])
 
+  // Växer med innehållet (ingen scrollbar) istället för en fast radhöjd – måste räknas om varje
+  // gång texten ändras, annars släpar höjden efter ett tecken bakom det som faktiskt skrivits.
+  useLayoutEffect(() => {
+    if (!bare || !textareaRef.current) return
+    textareaRef.current.style.height = 'auto'
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+  }, [bare, value])
+
   return (
     <div className="material-autocomplete">
-      <div className={`material-autocomplete-field${multiline ? ' multiline' : ''}`}>
+      <div className={`material-autocomplete-field${multiline ? ' multiline' : ''}${bare ? ' bare' : ''}`}>
         {multiline ? (
           <textarea
             ref={textareaRef}
             id={inputId}
-            rows={2}
+            rows={bare ? 1 : 2}
             value={value}
             placeholder={placeholder}
             readOnly={readOnly}
@@ -89,7 +104,10 @@ export function RowTextInput({
               setOpen(true)
             }}
             onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onBlur={() => {
+              setTimeout(() => setOpen(false), 150)
+              onBlurCapture?.()
+            }}
             onKeyDown={blurOnEscape}
           />
         ) : (

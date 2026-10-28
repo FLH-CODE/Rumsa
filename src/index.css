@@ -290,6 +290,11 @@ textarea:focus-visible {
    den alltid hamnar överst, oavsett vilket lager den öppnas ovanpå. */
 .confirm-dialog-backdrop {
   z-index: 300;
+  /* Centrerad istället för toppankrad (se .modal-backdrop) – en ren ja/nej-fråga har inget
+     textfält att lämna plats åt ett tangentbord för, så mitten på skärmen känns naturligare än
+     att tvinga den upp mot kanten. */
+  align-items: center;
+  padding-top: 0;
 }
 
 .confirm-dialog {
@@ -816,6 +821,10 @@ textarea:focus-visible {
   width: 100%;
   max-width: 560px;
   height: 85vh;
+  /* Bara .inventory-sheet-content (eller .room-type-menu) scrollar – inte sheeten som helhet, se
+     kommentar vid .inventory-sheet-header – annars kunde den sticky footern hamna mitt i en lång
+     materiallista istället för att ligga kvar nere vid kortets kant. */
+  overflow: hidden;
 }
 
 /* På telefon/smal skärm fyller rumskortet hela skärmen istället för att vara en botten-sheet med
@@ -847,13 +856,14 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  /* Sparstatusen ska synas även när man scrollat ner i ett långt formulär (t.ex. många rader). */
-  position: sticky;
-  top: -20px;
+  /* flex-shrink:0 (inte sticky) – bara .inventory-sheet-content scrollar nu (se där), så header
+     och footer behöver inte längre "följa med" ett scroll som inte passerar förbi dem. En tidigare
+     sticky-footer i samma scrollyta som ett långt material-flöde kunde annars hamna mitt i listan
+     och täcka innehåll istället för att ligga kvar nere vid kortets egen kant. */
+  flex-shrink: 0;
   margin: -20px -16px 0;
   padding: 20px 16px 12px;
   background: var(--color-surface);
-  z-index: 2;
 }
 
 /* Fyller ut allt lediga utrymme i den (fast höga, se .inventory-sheet) sheeten, så att footern
@@ -863,6 +873,7 @@ textarea:focus-visible {
 .inventory-sheet-content {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .inventory-sheet-title {
@@ -899,6 +910,9 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 12px;
@@ -974,6 +988,60 @@ textarea:focus-visible {
   /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
      osynligt istället för att bara krävas lite horisontell scroll för att nå. */
   overflow-x: auto;
+}
+
+/* Under ikonralen, egen rad över hela kortets bredd – samma mönster som ralj:en i övrigt, så den
+   läses som "ännu ett arbetsläge" snarare än en fristående knapp. */
+.summary-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 6px 4px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.summary-toggle-btn.active {
+  color: var(--color-primary);
+}
+
+.room-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-subheading {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.summary-material {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-ovrigt {
+  margin-top: 2px;
 }
 
 /* Ligger till höger om perspektivillustrationen, på en egen rad – inte en vertikal stapel – för
@@ -1198,18 +1266,13 @@ textarea:focus-visible {
   transition: filter 0.1s ease, transform 0.1s ease;
 }
 
-/* Anteckningsikonen – muted/tom som standard, markerad (primärfärg) när en anteckning redan
-   finns, så man ser vilka material som har en anteckning utan att behöva öppna var och en. */
-.material-entry-note-btn {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-}
-
-.material-entry-note-btn.has-note {
-  color: var(--color-primary);
+/* Anteckningstexten är själv den klickbara ytan som öppnar redigeringsläget (ingen separat ikon) –
+   en diskret streckad understrykning räcker som "klickbar text"-signal utan att dra blicken från
+   innehållet. */
+.material-entry-note.editable {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--color-border);
+  display: inline-block;
 }
 
 .material-entry-note-empty {
@@ -1243,19 +1306,6 @@ textarea:focus-visible {
   gap: 10px;
   border-left: 1px solid var(--color-border);
   padding-left: 16px;
-  transition: width 0.18s ease;
-}
-
-/* Medan man skapar en ny tagg: paletten breddas ordentligt så Kod/Beskrivning-fälten får gott om
-   plats, och innehållet till vänster om strecket tonas ner (se .room-workspace-main[inert]) så
-   att den bredare paletten känns avsiktlig, inte som att den bara trängt undan resten. */
-.tag-palette.expanded {
-  width: 280px;
-}
-
-.room-workspace-main[inert] {
-  opacity: 0.35;
-  transition: opacity 0.18s ease;
 }
 
 .tag-palette-list {
@@ -1266,43 +1316,15 @@ textarea:focus-visible {
   overflow-y: auto;
 }
 
-/* "+ Skapa ny tagg"-formuläret är byggt för bredare sammanhang (två knappar sida vid sida) – i
-   den smala (ej expanderade) paletten fick det annars knapparna (och ibland fälten) att svämma
-   över kortets högerkant. Stack:ar om till en smal, fullbredd variant istället. När paletten är
-   expanderad (.expanded, se ovan) finns gott om plats, så då behålls den vanliga sida-vid-sida
-   layouten. */
-.tag-palette:not(.expanded) .tag-quick-add {
-  padding: 8px;
-}
-
-.tag-palette:not(.expanded) .tag-quick-add-actions {
-  flex-direction: column;
-}
-
-.tag-palette:not(.expanded) .tag-quick-add-actions .btn {
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 10px;
-}
-
 .palette-tag {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 6px 4px;
+  padding: 2px 0;
   border-radius: 8px;
   cursor: grab;
   touch-action: none;
-}
-
-/* Ingen grå rektangel bakom hela raden vid hover – för mycket visuell vikt för en ren
-   hover-respons. Taggen själv blir istället en aning mörkare och växer marginellt, vilket räcker
-   för att kännas "klickbar/dragbar" utan att dra blicken från texten. */
-.palette-tag:hover .tag-chip {
-  filter: brightness(0.93);
-  transform: scale(1.04);
 }
 
 .palette-tag:active {
@@ -1313,17 +1335,35 @@ textarea:focus-visible {
   opacity: 0.4;
 }
 
-.palette-tag-text {
+/* Hela taggen (kod + beskrivning) ligger inom samma färgade behållare, vänsterjusterat i samma
+   kant – istället för en liten chip följt av lös text bredvid, som lätt lästes som två olika
+   element. Beskrivningen återanvänder taggens egen färg (lite dämpad) så den tydligt hör ihop med
+   koden ovanför. */
+.palette-tag-chip {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 9px;
+  border-radius: 10px;
+  transition: filter 0.1s ease, transform 0.1s ease;
 }
 
-.palette-tag-text .tag-chip {
-  max-width: 100%;
+.palette-tag:hover .palette-tag-chip {
+  filter: brightness(0.93);
+  transform: scale(1.02);
+}
+
+.palette-tag-code {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.palette-tag-desc {
+  font-size: 0.76rem;
+  opacity: 0.8;
+  text-align: left;
 }
 
 /* På smalare skärmar (telefon) krymper ralj/palett något så den smala mittenkolumnen ändå får
@@ -1341,11 +1381,6 @@ textarea:focus-visible {
   .tag-palette {
     width: 112px;
     padding-left: 10px;
-  }
-
-  .tag-palette.expanded {
-    width: 220px;
-    padding-left: 16px;
   }
 }
 
@@ -1489,6 +1524,29 @@ textarea:focus-visible {
   align-items: flex-start;
 }
 
+/* Ingen behållare (kant/bakgrund) och ingen fast radhöjd/scrollbar – textarean ritas som om den
+   vore vanlig text, och växer själv i höjd med innehållet (se useLayoutEffect i RowTextInput) så
+   hela anteckningen alltid syns direkt. */
+.material-autocomplete-field.bare {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.material-autocomplete-field.bare:focus-within {
+  box-shadow: none;
+}
+
+.material-autocomplete-field.bare textarea {
+  padding: 0;
+  min-height: 0;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+  resize: none;
+  overflow: hidden;
+}
+
 .material-autocomplete-field input:focus-visible,
 .material-autocomplete-field textarea:focus-visible {
   outline: none;
@@ -1554,31 +1612,6 @@ textarea:focus-visible {
   font-size: 0.9rem;
   padding: 6px 2px;
   min-height: 36px;
-}
-
-.tag-quick-add {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: var(--color-bg);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.tag-quick-add-note {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-  font-size: 0.95rem;
-  min-height: 44px;
-  background: var(--color-surface);
-}
-
-.tag-quick-add-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .tag-used-in-rooms {
@@ -1706,13 +1739,11 @@ textarea:focus-visible {
 .inventory-sheet-footer {
   justify-content: space-between;
   align-items: center;
-  position: sticky;
-  bottom: calc(-20px - var(--safe-bottom));
+  flex-shrink: 0;
   margin: 0 -16px calc(-20px - var(--safe-bottom));
   padding: 12px 16px calc(14px + var(--safe-bottom));
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
-  z-index: 2;
 }
 
 .save-status[data-status='error'] {

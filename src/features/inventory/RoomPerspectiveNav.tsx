@@ -20,9 +20,13 @@ const PETAL_D =
 export function RoomPerspectiveNav({
   active,
   onSelect,
+  filled,
 }: {
   active: RoomCategory | null
   onSelect: (category: RoomCategory) => void
+  /** Vilka ytor som redan har ifylld data – ritas med ett tjockare streck så man ser skillnaden
+   * mot en tom yta utan att behöva öppna varje flik för att kolla. */
+  filled?: Partial<Record<RoomCategory, boolean>>
 }) {
   const handleKeyDown = (category: RoomCategory) => (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -47,7 +51,7 @@ export function RoomPerspectiveNav({
     d: PETAL_D,
     fill: fill(category),
     stroke: STROKE,
-    strokeWidth: 2,
+    strokeWidth: filled?.[category] ? 4 : 2,
   })
 
   return (

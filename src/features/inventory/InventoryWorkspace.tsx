@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -16,11 +16,12 @@ import {
 import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory } from '../../db'
 import { RowTextInput } from './RowTextInput'
 import { RoomPerspectiveNav } from './RoomPerspectiveNav'
+import { TagEditSheet } from '../tags/TagEditSheet'
 import { tagLabel } from '../tags/tagLabel'
-import { tagChipStyle, nextTagColorIndex } from '../tags/colorForValue'
+import { tagChipStyle } from '../tags/colorForValue'
 import { confirmDialog } from '../../components/ConfirmDialog'
-import { confirmOnEnterEscape, blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
-import { NoteIcon, GripIcon } from '../../components/icons'
+import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
+import { GripIcon, SummaryIcon } from '../../components/icons'
 import { PhotoGallery } from '../../components/PhotoGallery'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
 
@@ -72,17 +73,34 @@ export function InventoryWorkspace({
   // om taggen det syftar på råkat tas bort (visar då "Okänd tagg", se tagLabel).
   const [activeDrag, setActiveDrag] = useState<{ kind: 'tag' | 'material'; tag: MaterialTag | undefined } | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
-  // Styrs här (inte lokalt i TagPalette) så att innehållet till vänster om det vertikala
-  // strecket kan tonas ner medan man skapar en ny tagg.
-  const [creatingTag, setCreatingTag] = useState(false)
+  // En tagg skapas/redigeras alltid i samma popup (se TagEditSheet) oavsett om den öppnas från
+  // taggöversikten eller härifrån – `tag: null` betyder "skapar ny" i den valda kategorin.
+  const [editingPaletteTag, setEditingPaletteTag] = useState<{ category: RoomCategory; tag: MaterialTag | null } | null>(null)
+  // Visar all ifylld data samtidigt, grupperad per kategori, istället för den vanliga
+  // flik-i-taget-vyn – se RoomSummary.
+  const [showSummary, setShowSummary] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
-  // Byte av arbetsläge avbryter alltid en pågående "skapa ny tagg" – annars kunde formuläret
-  // (och den expanderade/tonade layouten) hänga kvar för fel kategori.
   const selectTab = (tab: RoomTab) => {
-    setCreatingTag(false)
+    setShowSummary(false)
     setActiveTab(tab)
+  }
+
+  // Räknar fram vilka ytor/kategorier som redan har något ifyllt, för de tunnare/tjockare
+  // strecken i perspektivillustrationen och ikonralen (se RoomPerspectiveNav/CategoryRail).
+  const roomPhotoCount = useLiveQuery(() => (roomId ? db.roomPhotos.where('roomId').equals(roomId).count() : Promise.resolve(0)), [roomId])
+  const categoryFilled = (category: RoomCategory) => categories[category].materials.length > 0 || categories[category].ovrigt.trim() !== ''
+  const filled: Partial<Record<RoomTab, boolean>> = {
+    golv: categoryFilled('golv'),
+    vagg: categoryFilled('vagg'),
+    tak: categoryFilled('tak'),
+    utrustning: categoryFilled('utrustning'),
+    ovrigt: categoryFilled('ovrigt'),
+    funktion: Boolean(
+      funktion.antalPersoner.trim() || funktion.funktionsbeskrivning.trim() || funktion.dagsljus.trim() || funktion.storlek.trim(),
+    ),
+    bilder: (roomPhotoCount ?? 0) > 0,
   }
 
   const insertMaterial = (category: RoomCategory, index: number, tag: MaterialTag) =>
@@ -92,9 +110,6 @@ export function InventoryWorkspace({
       materials.splice(clampedIndex, 0, { id: createId(), tagId: tag.id, note: '' })
       return { ...entry, materials }
     })
-
-  const appendMaterial = (category: RoomCategory, tag: MaterialTag) =>
-    insertMaterial(category, categories[category].materials.length, tag)
 
   const updateMaterialNote = (category: RoomCategory, refId: string, note: string) =>
     setCategoryEntry(category, (entry) => ({
@@ -189,12 +204,24 @@ export function InventoryWorkspace({
     >
       <div className="room-workspace">
         <div className="room-nav-row">
-          <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} />
-          <CategoryRail tabs={railTabs} active={activeTab} onSelect={selectTab} />
+          <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} filled={filled} />
+          <CategoryRail tabs={railTabs} active={activeTab} filled={filled} onSelect={selectTab} />
         </div>
 
-        <div className={`room-workspace-body${creatingTag ? ' palette-expanded' : ''}`}>
-          <div className="room-workspace-main" inert={creatingTag}>
+        <button
+          type="button"
+          className={`summary-toggle-btn${showSummary ? ' active' : ''}`}
+          onClick={() => setShowSummary((prev) => !prev)}
+        >
+          <SummaryIcon width={18} height={18} />
+          {showSummary ? 'Dölj sammanfattning' : 'Visa sammanfattning'}
+        </button>
+
+        {showSummary ? (
+          <RoomSummary projectId={projectId} categories={categories} funktion={funktion} />
+        ) : (
+        <div className="room-workspace-body">
+          <div className="room-workspace-main">
             <h2 className="active-category-label">{CATEGORY_LABEL[activeTab]}</h2>
             {activeTab === 'funktion' ? (
               readOnly ? (
@@ -279,13 +306,11 @@ export function InventoryWorkspace({
               key={activeTab}
               projectId={projectId}
               category={activeTab}
-              creating={creatingTag}
-              onCreatingChange={setCreatingTag}
-              onPick={(tag) => appendMaterial(activeTab, tag)}
-              onTagCreated={onTagCreated}
+              onEditTag={(tag) => setEditingPaletteTag({ category: activeTab, tag })}
             />
           )}
         </div>
+        )}
       </div>
 
       <DragOverlay>
@@ -295,6 +320,16 @@ export function InventoryWorkspace({
           </span>
         )}
       </DragOverlay>
+
+      {editingPaletteTag && (
+        <TagEditSheet
+          projectId={projectId}
+          category={editingPaletteTag.category}
+          tag={editingPaletteTag.tag}
+          onClose={() => setEditingPaletteTag(null)}
+          onCreated={onTagCreated}
+        />
+      )}
     </DndContext>
   )
 }
@@ -319,10 +354,13 @@ function FieldValue({ label, value }: { label: string; value: string }) {
 function CategoryRail({
   tabs,
   active,
+  filled,
   onSelect,
 }: {
   tabs: RailTab[]
   active: RoomTab
+  /** Vilka flikar som redan har något ifyllt – ritas med ett tjockare streck (se RoomPerspectiveNav). */
+  filled?: Partial<Record<RailTab, boolean>>
   onSelect: (tab: RailTab) => void
 }) {
   return (
@@ -338,7 +376,7 @@ function CategoryRail({
             aria-label={CATEGORY_LABEL[tab]}
             title={CATEGORY_LABEL[tab]}
           >
-            <Icon width={20} height={20} />
+            <Icon width={20} height={20} strokeWidth={filled?.[tab] ? 3 : 2} />
           </button>
         )
       })}
@@ -514,19 +552,9 @@ function MaterialEntry({
           {tagLabel(tag)}
         </span>
         {!readOnly && (
-          <>
-            <button
-              type="button"
-              className={`material-entry-note-btn${hasNote ? ' has-note' : ''}`}
-              onClick={() => setEditingNote((prev) => !prev)}
-              aria-label={hasNote ? 'Redigera anteckning' : 'Lägg till anteckning'}
-            >
-              <NoteIcon width={16} height={16} />
-            </button>
-            <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
-              ✕
-            </button>
-          </>
+          <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
+            ✕
+          </button>
         )}
       </div>
       {/* Indragen i jämnhöjd med taggchipet ovanför (inte raden som helhet, som annars börjar vid
@@ -554,14 +582,18 @@ function MaterialEntry({
             projectId={projectId}
             source="materialNote"
             multiline
+            bare
             autoFocus
             value={reference.note}
             onChange={onNoteChange}
             placeholder="Anteckning (valfritt), t.ex. upp till 1200mm"
           />
         ) : (
-          <p className={`field-static-value material-entry-note${hasNote ? '' : ' material-entry-note-empty'}`}>
-            {hasNote ? reference.note : 'Ingen anteckning'}
+          <p
+            className={`field-static-value material-entry-note editable${hasNote ? '' : ' material-entry-note-empty'}`}
+            onClick={() => setEditingNote(true)}
+          >
+            {hasNote ? reference.note : 'Lägg till anteckning'}
           </p>
         )}
       </div>
@@ -570,23 +602,17 @@ function MaterialEntry({
 }
 
 /** Alltid synlig, fristående taggpalett för den aktiva kategorin (ingen omslutande behållare) –
- * en tagg går både att dra och att trycka direkt på för att lägga till den i kortet. Expanderar
- * (och tonar ner innehållet till vänster om strecket) medan man skapar en ny tagg, så Kod/
- * Beskrivning-fälten får gott om plats istället för att klämmas in i den annars smala paletten. */
+ * en tagg går att DRA in i kortet; ett klick öppnar istället samma redigeringspopup som
+ * taggöversikten använder (se TagEditSheet), för både en befintlig tagg och (via "+ Skapa ny
+ * tagg") en ny. */
 function TagPalette({
   projectId,
   category,
-  creating,
-  onCreatingChange,
-  onPick,
-  onTagCreated,
+  onEditTag,
 }: {
   projectId: string
   category: RoomCategory
-  creating: boolean
-  onCreatingChange: (creating: boolean) => void
-  onPick: (tag: MaterialTag) => void
-  onTagCreated?: (tagId: string) => void
+  onEditTag: (tag: MaterialTag | null) => void
 }) {
   const tags = useLiveQuery(
     () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).sortBy('code'),
@@ -594,19 +620,13 @@ function TagPalette({
   )
 
   return (
-    <div className={`tag-palette${creating ? ' expanded' : ''}`}>
-      {!creating && (
-        <div className="tag-palette-list">
-          {tags?.map((tag) => <PaletteTag key={tag.id} tag={tag} onPick={() => onPick(tag)} />)}
-        </div>
-      )}
-      {creating ? (
-        <PaletteTagCreate projectId={projectId} category={category} onDone={() => onCreatingChange(false)} onCreated={onTagCreated} />
-      ) : (
-        <button type="button" className="material-add-btn" onClick={() => onCreatingChange(true)}>
-          + Skapa ny tagg
-        </button>
-      )}
+    <div className="tag-palette">
+      <div className="tag-palette-list">
+        {tags?.map((tag) => <PaletteTag key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />)}
+      </div>
+      <button type="button" className="material-add-btn" onClick={() => onEditTag(null)}>
+        + Skapa ny tagg
+      </button>
     </div>
   )
 }
@@ -616,8 +636,10 @@ function TagPalette({
  * taggen som rör sig samtidigt, en nedtonad (originalet, flyttat rakt mot pekaren oavsett var i
  * layouten den startade) och en skarp (DragOverlay), vilket såg ut som att taggar krockade med
  * annat innehåll de passerade över. Originalet tonas bara ner i rad (`.dragging`) istället, så det
- * är tydligt att DEN flyttas, medan DragOverlay ensam sköter den rörliga kopian. */
-function PaletteTag({ tag, onPick }: { tag: MaterialTag; onPick: () => void }) {
+ * är tydligt att DEN flyttas, medan DragOverlay ensam sköter den rörliga kopian.
+ * Ett klick (till skillnad från en dragning) öppnar redigeringspopupen istället för att lägga till
+ * taggen i kortet – det görs numera bara genom att dra den dit. */
+function PaletteTag({ tag, onEdit }: { tag: MaterialTag; onEdit: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${tag.id}`,
     data: { type: 'tag', tag },
@@ -627,103 +649,106 @@ function PaletteTag({ tag, onPick }: { tag: MaterialTag; onPick: () => void }) {
       type="button"
       ref={setNodeRef}
       className={`palette-tag${isDragging ? ' dragging' : ''}`}
-      onClick={onPick}
+      onClick={onEdit}
       {...attributes}
       {...listeners}
     >
-      <span className="palette-tag-text">
-        <span className="tag-chip" style={tagChipStyle(tag.colorIndex)}>
-          {tag.code}
-        </span>
-        {tag.description && <span className="field-hint">{tag.description}</span>}
+      <span className="palette-tag-chip" style={tagChipStyle(tag.colorIndex)}>
+        <span className="palette-tag-code">{tag.code}</span>
+        {tag.description && <span className="palette-tag-desc">{tag.description}</span>}
       </span>
     </button>
   )
 }
 
-function PaletteTagCreate({
+/** "Visa sammanfattning": all ifylld data i rummet på en gång, grupperad per kategori – istället
+ * för att behöva klicka igenom varje flik för sig för att få en överblick. Golv/Tak/Vägg (de tre
+ * ytorna i perspektivillustrationen) samlas under en gemensam rubrik ("Ytskikt"), eftersom de
+ * hänger ihop visuellt i den vanliga vyn också. */
+function RoomSummary({
   projectId,
-  category,
-  onDone,
-  onCreated,
+  categories,
+  funktion,
 }: {
   projectId: string
-  category: RoomCategory
-  onDone: () => void
-  onCreated?: (tagId: string) => void
+  categories: Record<RoomCategory, CategoryEntry>
+  funktion: FunktionFields
 }) {
-  const [code, setCode] = useState('')
-  const [description, setDescription] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSave = async () => {
-    const trimmed = code.trim()
-    if (!trimmed || saving) return
-    setSaving(true)
-    setError(null)
-    const id = createId()
-    try {
-      await db.transaction('rw', db.materialTags, async () => {
-        const collision = await db.materialTags
-          .where('projectId')
-          .equals(projectId)
-          .filter((t) => t.category === category && t.code.toLowerCase() === trimmed.toLowerCase())
-          .first()
-        if (collision) throw new Error(`Taggen "${collision.code}" finns redan.`)
-        await db.materialTags.add({
-          id,
-          projectId,
-          category,
-          code: trimmed,
-          description: description.trim(),
-          colorIndex: await nextTagColorIndex(projectId, category),
-          createdAt: Date.now(),
-        })
-      })
-      onCreated?.(id)
-      onDone()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunde inte skapa taggen.')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).toArray(), [projectId])
+  const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
+  const funktionEmpty =
+    !funktion.antalPersoner.trim() && !funktion.funktionsbeskrivning.trim() && !funktion.dagsljus.trim() && !funktion.storlek.trim()
 
   return (
-    <div className="tag-quick-add">
-      <div className="field">
-        <input
-          autoFocus
-          enterKeyHint="done"
-          value={code}
-          placeholder="Kod, t.ex. Klinker 1"
-          onChange={(e) => setCode(e.target.value)}
-          onKeyDown={confirmOnEnterEscape(() => void handleSave(), onDone)}
-        />
-      </div>
-      <div className="field">
-        <input
-          enterKeyHint="done"
-          value={description}
-          placeholder="Beskrivning (valfritt)"
-          onChange={(e) => setDescription(e.target.value)}
-          onKeyDown={confirmOnEnterEscape(() => void handleSave(), onDone)}
-        />
-      </div>
-      {error && (
-        <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      )}
-      <div className="tag-quick-add-actions">
-        <button type="button" className="btn btn-secondary" onClick={onDone}>
-          Avbryt
-        </button>
-        <button type="button" className="btn btn-primary" disabled={!code.trim() || saving} onClick={() => void handleSave()}>
-          {saving ? 'Sparar…' : 'Skapa'}
-        </button>
-      </div>
+    <div className="room-summary">
+      <section className="summary-section">
+        <h3 className="section-heading-text">Ytskikt</h3>
+        {(['golv', 'tak', 'vagg'] as const).map((category) => (
+          <div key={category} className="summary-category">
+            <h4 className="summary-subheading">{CATEGORY_LABEL[category]}</h4>
+            <SummaryCategoryBody entry={categories[category]} tagById={tagById} />
+          </div>
+        ))}
+      </section>
+      <SummarySection heading="Utrustning">
+        <SummaryCategoryBody entry={categories.utrustning} tagById={tagById} showAntal />
+      </SummarySection>
+      <SummarySection heading="Övrigt">
+        <SummaryCategoryBody entry={categories.ovrigt} tagById={tagById} />
+      </SummarySection>
+      <SummarySection heading="Funktion">
+        {funktionEmpty ? (
+          <p className="field-hint">Inget ifyllt.</p>
+        ) : (
+          <div className="inventory-rows">
+            <FieldValue label="Antal personer" value={funktion.antalPersoner} />
+            <FieldValue label="Funktionsbeskrivning" value={funktion.funktionsbeskrivning} />
+            <FieldValue label="Dagsljus" value={funktion.dagsljus} />
+            <FieldValue label="Storlek" value={funktion.storlek} />
+          </div>
+        )}
+      </SummarySection>
+    </div>
+  )
+}
+
+function SummarySection({ heading, children }: { heading: string; children: ReactNode }) {
+  return (
+    <section className="summary-section">
+      <h3 className="section-heading-text">{heading}</h3>
+      {children}
+    </section>
+  )
+}
+
+function SummaryCategoryBody({
+  entry,
+  tagById,
+  showAntal,
+}: {
+  entry: CategoryEntry
+  tagById: Map<string, MaterialTag>
+  showAntal?: boolean
+}) {
+  const hasOvrigt = entry.ovrigt.trim().length > 0
+  if (entry.materials.length === 0 && !hasOvrigt) {
+    return <p className="field-hint">Inget ifyllt.</p>
+  }
+  return (
+    <div className="inventory-rows">
+      {entry.materials.map((ref) => {
+        const tag = tagById.get(ref.tagId)
+        return (
+          <div key={ref.id} className="summary-material">
+            <span className="tag-chip" style={tagChipStyle(tag?.colorIndex)}>
+              {tagLabel(tag)}
+            </span>
+            {showAntal && (ref.antal ?? 1) > 1 && <span className="field-hint">Antal: {ref.antal}</span>}
+            {ref.note.trim() && <span className="field-static-value material-entry-note">{ref.note}</span>}
+          </div>
+        )
+      })}
+      {hasOvrigt && <p className="field-static-value material-entry-note summary-ovrigt">{entry.ovrigt}</p>}
     </div>
   )
 }

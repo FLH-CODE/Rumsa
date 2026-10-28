@@ -211,6 +211,27 @@ export function CameraIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Suddgummi – symbolen för att rensa rummets egen ifyllda data (se RoomInventorySheet.tsx). */
+export function EraserIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 20H9L4.5 15.5a2 2 0 0 1 0-2.83l7-7a2 2 0 0 1 2.83 0l5 5a2 2 0 0 1 0 2.83L13.5 19" />
+      <path d="M8 13l5.5 5.5" />
+    </svg>
+  )
+}
+
+/** Lista/dokument – symbolen för att visa en samlad sammanfattning av rummets data (se
+ * InventoryWorkspace.tsx). */
+export function SummaryIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
+      <path d="M8 10h8M8 14h8M8 18h5" />
+    </svg>
+  )
+}
+
 export function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
