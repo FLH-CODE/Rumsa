@@ -11,6 +11,7 @@ import { usePdfDocument } from '../features/pdf/usePdfDocument'
 import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { getViewerPosition, setViewerPosition } from '../features/pdf/viewerPositionStore'
+import { renameOrAssignLevel } from '../features/pdf/levelAssignment'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
@@ -28,6 +29,10 @@ export default function DrawingViewerPage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [addRoomMode, setAddRoomMode] = useState(false)
+  // Rummet vars tagg just nu håller på att flyttas (via ett långt tryck på taggen, se
+  // PdfPageCanvas) – nästa tryck på ritningen flyttar DEN taggen istället för att skapa ett nytt
+  // rum, så de två lägena är ömsesidigt uteslutande (se handleCanvasTap/placementMode).
+  const [movingRoom, setMovingRoom] = useState<Room | null>(null)
   // Måste matcha den sparade positionens skala direkt vid montering (inte bara 1) – annars
   // räknar rumstaggarnas motskalning mot fel zoomnivå under den korta stund innan en faktisk
   // pan/zoom-interaktion hinner uppdatera värdet, vilket gjorde dem jättestora när man öppnade
@@ -114,6 +119,11 @@ export default function DrawingViewerPage() {
 
   const handleCanvasTap = async (pdfX: number, pdfY: number) => {
     if (!currentPage || !projectId) return
+    if (movingRoom) {
+      await db.rooms.update(movingRoom.id, { tagX: pdfX, tagY: pdfY })
+      setMovingRoom(null)
+      return
+    }
     setAddRoomMode(false)
     // Förifyllt istället för tomt – annars tolkas rummet som "aldrig namngivet" och raderas tyst
     // igen av RoomInventorySheet om man stänger kortet utan att skriva något (se dess closeSheet).
@@ -178,9 +188,6 @@ export default function DrawingViewerPage() {
     setZoomScale(getViewerPosition(pageId)?.scale ?? 1)
     navigate(`/project/${projectId}/viewer/${pageId}`, { replace: true })
   }
-
-  const goPrev = () => currentIndex > 0 && goTo(sortedPages[currentIndex - 1].id)
-  const goNext = () => currentIndex < sortedPages.length - 1 && goTo(sortedPages[currentIndex + 1].id)
 
   // Hoppar direkt till ett annat rums kort (t.ex. från taggöversiktens "Används i"-lista), även
   // om rummet sitter på en annan sida än den man just nu tittar på.
@@ -272,16 +279,6 @@ export default function DrawingViewerPage() {
         </aside>
 
         <div className="viewer-main" ref={mainRef}>
-          {currentIndex > 0 && (
-            <button className="viewer-nav-btn prev tap-target" onClick={goPrev} aria-label="Föregående sida">
-              ‹
-            </button>
-          )}
-          {currentIndex < sortedPages.length - 1 && (
-            <button className="viewer-nav-btn next tap-target" onClick={goNext} aria-label="Nästa sida">
-              ›
-            </button>
-          )}
           {docError && <div className="viewer-empty">Ritningen kunde inte läsas in. {docError.message}</div>}
           {!doc && !docError && <div className="viewer-empty">Läser in ritning…</div>}
           {doc && mainSize && (
@@ -324,19 +321,35 @@ export default function DrawingViewerPage() {
                   highlightRoomIds={highlightRoomIds}
                   highlightColor={filterTag ? colorForIndex(filterTag.colorIndex) : undefined}
                   onRoomTap={setSelectedRoom}
-                  addMode={addRoomMode}
+                  onRoomLongPress={(room) => {
+                    setAddRoomMode(false)
+                    setMovingRoom(room)
+                  }}
+                  movingRoomId={movingRoom?.id ?? null}
+                  addMode={addRoomMode || Boolean(movingRoom)}
                   onCanvasTap={(x, y) => void handleCanvasTap(x, y)}
                 />
               </TransformComponent>
             </TransformWrapper>
           )}
           <div className="viewer-toolbar">
-            <button
-              className={`btn ${addRoomMode ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setAddRoomMode((on) => !on)}
-            >
-              {addRoomMode ? 'Tryck på ritningen…' : '+ Lägg till rum'}
-            </button>
+            {movingRoom ? (
+              <>
+                <span className="viewer-toolbar-hint">
+                  Tryck på ritningen för att flytta {movingRoom.roomNumber || movingRoom.roomName}
+                </span>
+                <button className="btn btn-secondary" onClick={() => setMovingRoom(null)}>
+                  Avbryt
+                </button>
+              </>
+            ) : (
+              <button
+                className={`btn ${addRoomMode ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setAddRoomMode((on) => !on)}
+              >
+                {addRoomMode ? 'Tryck på ritningen…' : '+ Lägg till rum'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -362,6 +375,7 @@ export default function DrawingViewerPage() {
           projectId={projectId}
           onClose={() => setShowTagsOverview(false)}
           onOpenRoom={handleOpenRoom}
+          variant="sheet"
         />
       )}
     </div>
@@ -438,36 +452,10 @@ function LevelRenameSheet({
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
-    const trimmed = name.trim()
-    if (!trimmed || saving) return
+    if (!name.trim() || saving) return
     setSaving(true)
     try {
-      if (level) {
-        await db.levels.update(level.id, { name: trimmed })
-      } else {
-        // Återanvänd en befintlig nivå med samma namn istället för att alltid skapa en ny – annars
-        // kan man råka skapa dubbletter av t.ex. "PLAN 7" om flera sidor saknar nivå samtidigt.
-        await db.transaction('rw', [db.levels, db.drawingPages, db.rooms], async () => {
-          const existingLevels = await db.levels.where('projectId').equals(projectId).toArray()
-          let target = existingLevels.find((l) => l.name.toLowerCase() === trimmed.toLowerCase())
-
-          if (!target) {
-            const numericMatch = trimmed.match(/\d+/)
-            target = {
-              id: createId(),
-              projectId,
-              name: trimmed,
-              order: numericMatch ? parseInt(numericMatch[0], 10) : existingLevels.length,
-            }
-            await db.levels.add(target)
-          }
-
-          await db.drawingPages.update(drawingPage.id, { levelId: target.id })
-          // Rum som redan upptäckts på sidan innan nivån fanns pekade på levelId: null – utan den
-          // här uppdateringen skulle de tappa bort nivåkopplingen i t.ex. Excel-exporten.
-          await db.rooms.where('drawingPageId').equals(drawingPage.id).modify({ levelId: target.id })
-        })
-      }
+      await renameOrAssignLevel(projectId, drawingPage.id, level?.id ?? null, name)
       onClose()
     } finally {
       setSaving(false)

@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import type { Room } from '../../db'
 import type { ElementSize } from '../../hooks/useElementSize'
+
+/** Hur länge man måste hålla inne en rumstagg innan det räknas som ett långt tryck (för att flytta
+ * taggen) istället för ett vanligt klick (som öppnar rumskortet). */
+const LONG_PRESS_MS = 500
+/** Avbryter ett pågående långt tryck om pekaren flyttar sig mer än så här många pixlar innan
+ * tiden gått ut – annars kunde en panorering som råkar börja ovanpå en tagg feltolkas som att man
+ * höll in den. */
+const LONG_PRESS_MOVE_TOLERANCE = 8
 
 /** Hur mycket extra upplösning (utöver skärmens pixeltäthet) som renderas utöver fit-to-screen,
  * så att man kan zooma in en bit innan bilden börjar bli suddig/pixelerad. */
@@ -29,6 +37,8 @@ export function PdfPageCanvas({
   highlightRoomIds,
   highlightColor,
   onRoomTap,
+  onRoomLongPress,
+  movingRoomId,
   addMode = false,
   onCanvasTap,
 }: {
@@ -46,7 +56,14 @@ export function PdfPageCanvas({
   highlightRoomIds?: Set<string> | null
   highlightColor?: string
   onRoomTap?: (room: Room) => void
-  /** När true: ett klick på ritningen (utanför en befintlig tagg) placerar ett nytt rum där. */
+  /** Håller man inne en rumstagg (se LONG_PRESS_MS) istället för att bara trycka på den. */
+  onRoomLongPress?: (room: Room) => void
+  /** Rummet som just nu håller på att flyttas (via onRoomLongPress) – visas med en egen markering
+   * så det är tydligt vilken tagg nästa tryck på ritningen gäller. */
+  movingRoomId?: string | null
+  /** När true: ett klick på ritningen (utanför en befintlig tagg) placerar ett rum där – antingen
+   * ett nytt (vanligt "lägg till rum"-läge) eller flyttar movingRoomId dit, beroende på vad
+   * anroparen gör i sin egen onCanvasTap. */
   addMode?: boolean
   onCanvasTap?: (pdfX: number, pdfY: number) => void
 }) {
@@ -108,6 +125,39 @@ export function PdfPageCanvas({
   const viewport = rendered?.pageIndex === pageIndex ? rendered.displayViewport : null
   const hotspotScale = 1 / zoomScale
 
+  // Håller reda på ett pågående långt tryck (för att flytta en taggs placering, se
+  // onRoomLongPress) separat från den vanliga klick-hanteringen – `suppressClick` förhindrar att
+  // samma tryck ÄVEN öppnar rumskortet (det normala klick-beteendet) när det redan räknats som ett
+  // långt tryck.
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null)
+  const suppressClickRef = useRef(false)
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressStartRef.current = null
+  }
+
+  const handleHotspotPointerDown = (room: Room) => (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!onRoomLongPress || addMode) return
+    longPressStartRef.current = { x: e.clientX, y: e.clientY }
+    longPressTimerRef.current = setTimeout(() => {
+      suppressClickRef.current = true
+      onRoomLongPress(room)
+    }, LONG_PRESS_MS)
+  }
+
+  const handleHotspotPointerMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const start = longPressStartRef.current
+    if (!start) return
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE) {
+      clearLongPressTimer()
+    }
+  }
+
   const handleStageClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!addMode || !viewport || !onCanvasTap) return
     const canvas = canvasRef.current
@@ -134,10 +184,12 @@ export function PdfPageCanvas({
           const done = completedRoomIds?.has(room.id)
           const filtering = highlightRoomIds != null
           const matches = filtering && highlightRoomIds.has(room.id)
+          const moving = movingRoomId === room.id
           const className = [
             'room-hotspot',
             !filtering && done && 'done',
             filtering && (matches ? 'filter-match' : 'filter-dim'),
+            moving && 'moving',
           ]
             .filter(Boolean)
             .join(' ')
@@ -151,8 +203,17 @@ export function PdfPageCanvas({
                 transform: `scale(${hotspotScale})`,
                 ...(matches && highlightColor ? { background: highlightColor, borderColor: highlightColor } : {}),
               }}
+              onPointerDown={handleHotspotPointerDown(room)}
+              onPointerMove={handleHotspotPointerMove}
+              onPointerUp={clearLongPressTimer}
+              onPointerLeave={clearLongPressTimer}
+              onContextMenu={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation()
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false
+                  return
+                }
                 onRoomTap?.(room)
               }}
               aria-label={`${room.roomName} ${room.roomNumber}${done ? ' – ifyllt' : ' – ej ifyllt'}`}

@@ -26,6 +26,7 @@ import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
 import { GripIcon, SummaryIcon } from '../../components/icons'
 import { PhotoGallery } from '../../components/PhotoGallery'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
+import { getLastActiveTab, setLastActiveTab } from './activeTabStore'
 
 type DropIndicator = { category: RoomCategory; index: number }
 
@@ -66,10 +67,19 @@ export function InventoryWorkspace({
    * trycker Avbryt istället för Klar. */
   onTagCreated?: (tagId: string) => void
 }) {
-  const [activeTab, setActiveTab] = useState<RoomTab>('funktion')
   // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
   // när arbetsytan faktiskt hör till ett riktigt rum.
   const railTabs = roomId ? RAIL_TABS : RAIL_TABS.filter((tab) => tab !== 'bilder')
+  // Börjar på senast valda arbetsläge (oavsett rum) istället för att alltid börja om på Funktion –
+  // men bara om den fliken faktiskt finns i den HÄR arbetsytan (t.ex. "Bilder" finns inte när man
+  // redigerar ett typrum, som saknar roomId).
+  const [activeTab, setActiveTab] = useState<RoomTab>(() => {
+    const stored = getLastActiveTab()
+    if (stored && (isRoomCategory(stored) || stored === 'funktion' || (railTabs as RoomTab[]).includes(stored))) {
+      return stored
+    }
+    return 'funktion'
+  })
   // 'tag' = en ny tagg dras in från paletten (se insertMaterial), 'material' = ett redan applicerat
   // material dras om inom sin egen lista (se moveMaterial). `tag` kan vara undefined för 'material'
   // om taggen det syftar på råkat tas bort (visar då "Okänd tagg", se tagLabel).
@@ -87,22 +97,7 @@ export function InventoryWorkspace({
   const selectTab = (tab: RoomTab) => {
     setShowSummary(false)
     setActiveTab(tab)
-  }
-
-  // Räknar fram vilka ytor/kategorier som redan har något ifyllt, för de tunnare/tjockare
-  // strecken i perspektivillustrationen och ikonralen (se RoomPerspectiveNav/CategoryRail).
-  const roomPhotoCount = useLiveQuery(() => (roomId ? db.roomPhotos.where('roomId').equals(roomId).count() : Promise.resolve(0)), [roomId])
-  const categoryFilled = (category: RoomCategory) => categories[category].materials.length > 0 || categories[category].ovrigt.trim() !== ''
-  const filled: Partial<Record<RoomTab, boolean>> = {
-    golv: categoryFilled('golv'),
-    vagg: categoryFilled('vagg'),
-    tak: categoryFilled('tak'),
-    utrustning: categoryFilled('utrustning'),
-    ovrigt: categoryFilled('ovrigt'),
-    funktion: Boolean(
-      funktion.antalPersoner.trim() || funktion.funktionsbeskrivning.trim() || funktion.dagsljus.trim() || funktion.storlek.trim(),
-    ),
-    bilder: (roomPhotoCount ?? 0) > 0,
+    setLastActiveTab(tab)
   }
 
   const insertMaterial = (category: RoomCategory, index: number, tag: MaterialTag) =>
@@ -210,9 +205,9 @@ export function InventoryWorkspace({
     >
       <div className="room-workspace">
         <div className="room-nav-row">
-          <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} filled={filled} />
+          <RoomPerspectiveNav active={!showSummary && isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} />
           <div className="rail-group">
-            <CategoryRail tabs={railTabs} active={activeTab} filled={filled} onSelect={selectTab} />
+            <CategoryRail tabs={railTabs} active={showSummary ? null : activeTab} onSelect={selectTab} />
             <button
               type="button"
               className={`category-rail-btn summary-rail-btn${showSummary ? ' active' : ''}`}
@@ -362,13 +357,10 @@ function FieldValue({ label, value }: { label: string; value: string }) {
 function CategoryRail({
   tabs,
   active,
-  filled,
   onSelect,
 }: {
   tabs: RailTab[]
-  active: RoomTab
-  /** Vilka flikar som redan har något ifyllt – ritas med ett tjockare streck (se RoomPerspectiveNav). */
-  filled?: Partial<Record<RailTab, boolean>>
+  active: RoomTab | null
   onSelect: (tab: RailTab) => void
 }) {
   return (
@@ -381,13 +373,10 @@ function CategoryRail({
             type="button"
             className={`category-rail-btn${active === tab ? ' active' : ''}`}
             onClick={() => onSelect(tab)}
-            aria-label={`${CATEGORY_LABEL[tab]}${filled?.[tab] ? ' – ifyllt' : ''}`}
+            aria-label={CATEGORY_LABEL[tab]}
             title={CATEGORY_LABEL[tab]}
           >
-            <Icon width={20} height={20} strokeWidth={filled?.[tab] ? 3 : 2} />
-            {/* Dot istället för (eller utöver) det tjockare strecket – syns tydligt oavsett om
-               ikonen just då är markerad (vit på blå botten) eller i sin vanliga, ljusgrå ton. */}
-            {filled?.[tab] && <span className="category-rail-dot" aria-hidden="true" />}
+            <Icon width={20} height={20} />
           </button>
         )
       })}
@@ -436,7 +425,7 @@ function CategoryContent({
               'Inget material angivet.'
             ) : (
               <>
-                Dra en tagg hit från listan till höger <span aria-hidden="true">←</span>
+                Dra en tagg hit från listan till höger <span className="category-empty-arrow" aria-hidden="true">←</span>
               </>
             )}
           </p>

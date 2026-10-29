@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
-import { db } from '../db'
+import { db, type DrawingPage, type Level } from '../db'
 import { useAutosave } from '../hooks/useAutosave'
 import { importDrawingFile } from '../features/pdf/importDrawing'
 import { syncRoomsForPage } from '../features/pdf/syncRooms'
+import { renameOrAssignLevel } from '../features/pdf/levelAssignment'
 import { pdfjsLib } from '../pdf/pdfjsSetup'
 import { deleteProjectCascade, deleteDrawingCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
 import { FullscreenButton } from '../components/FullscreenButton'
+import { blurOnEnterEscape } from '../utils/keyboardShortcuts'
 import {
   FloorPlanIcon,
   DrawingIcon,
@@ -51,6 +53,11 @@ export default function ProjectDetailPage() {
     () => db.drawings.where('projectId').equals(projectId ?? '').toArray(),
     [projectId],
   )
+  const drawingPages = useLiveQuery(
+    () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
+    [projectId],
+  )
+  const levels = useLiveQuery(() => db.levels.where('projectId').equals(projectId ?? '').toArray(), [projectId])
   const firstPage = useLiveQuery(
     () =>
       db.drawingPages
@@ -250,16 +257,31 @@ export default function ProjectDetailPage() {
           {drawings && drawings.length > 0 && (
             <div className="drawing-list">
               {drawings.map((d) => (
-                <div key={d.id} className="drawing-list-item">
-                  <span>{d.fileName}</span>
-                  <span className="field-hint">{d.pageCount} sidor</span>
-                  <button
-                    className="drawing-delete-btn tap-target"
-                    aria-label={`Ta bort ${d.fileName}`}
-                    onClick={() => void handleDeleteDrawing(d.id, d.fileName)}
-                  >
-                    <TrashIcon width={16} height={16} />
-                  </button>
+                <div key={d.id} className="drawing-group">
+                  <div className="drawing-list-item">
+                    <span>{d.fileName}</span>
+                    <span className="field-hint">{d.pageCount} sidor</span>
+                    <button
+                      className="drawing-delete-btn tap-target"
+                      aria-label={`Ta bort ${d.fileName}`}
+                      onClick={() => void handleDeleteDrawing(d.id, d.fileName)}
+                    >
+                      <TrashIcon width={16} height={16} />
+                    </button>
+                  </div>
+                  <div className="drawing-page-list">
+                    {(drawingPages ?? [])
+                      .filter((p) => p.drawingId === d.id)
+                      .sort((a, b) => a.pageIndex - b.pageIndex)
+                      .map((page) => (
+                        <DrawingPageLevelRow
+                          key={page.id}
+                          projectId={projectId!}
+                          page={page}
+                          level={(levels ?? []).find((l) => l.id === page.levelId) ?? null}
+                        />
+                      ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -353,5 +375,55 @@ export default function ProjectDetailPage() {
         </button>
       </main>
     </>
+  )
+}
+
+/** En rads namn-på-nivå-fält för en enskild ritningssida – samma spara-logik (döp om delad nivå,
+ * eller skapa/återanvänd + koppla) som "Namnge nivå"-dialogen i ritningsvisaren (se
+ * renameOrAssignLevel), bara alltid synligt/redigerbart direkt i listan istället för bakom en
+ * egen dialog man måste öppna sidan för sidan. */
+function DrawingPageLevelRow({
+  projectId,
+  page,
+  level,
+}: {
+  projectId: string
+  page: DrawingPage
+  level: Level | null
+}) {
+  const [name, setName] = useState(level?.name ?? '')
+  // Släpar efter en extern ändring (t.ex. via visarens egen dialog) bara medan man faktiskt skriver
+  // i fältet själv – annars skulle en redan pågående redigering kunna bli överskriven under en.
+  const [touched, setTouched] = useState(false)
+
+  useEffect(() => {
+    if (!touched) setName(level?.name ?? '')
+  }, [level?.name, touched])
+
+  const commit = async () => {
+    setTouched(false)
+    const trimmed = name.trim()
+    // Tomt fält sparas inte – det skulle annars kunna tömma ett nivånamn som delas av flera sidor
+    // bara för att man råkade radera texten och klicka bort utan att ångra sig.
+    if (!trimmed || trimmed === (level?.name ?? '')) return
+    await renameOrAssignLevel(projectId, page.id, level?.id ?? null, trimmed)
+  }
+
+  return (
+    <div className="drawing-page-row">
+      <span className="field-hint">Sida {page.pageIndex + 1}</span>
+      <input
+        className="drawing-page-level-input"
+        value={name}
+        placeholder="Namnge nivå…"
+        enterKeyHint="done"
+        onChange={(e) => {
+          setTouched(true)
+          setName(e.target.value)
+        }}
+        onBlur={() => void commit()}
+        onKeyDown={blurOnEnterEscape}
+      />
+    </div>
   )
 }

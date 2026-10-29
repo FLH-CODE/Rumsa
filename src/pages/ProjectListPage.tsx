@@ -54,10 +54,6 @@ export default function ProjectListPage() {
       </header>
       <main className="app-main">
         <div className="card-list">
-          <button className="card new-project-card" onClick={() => setShowCreate(true)}>
-            <PlusIcon width={20} height={20} />
-            <span>Nytt projekt</span>
-          </button>
           {projects === undefined
             ? null
             : projects.map((project) => (
@@ -81,6 +77,10 @@ export default function ProjectListPage() {
                   </button>
                 </div>
               ))}
+          <button className="card new-project-card" onClick={() => setShowCreate(true)}>
+            <PlusIcon width={20} height={20} />
+            <span>Nytt projekt</span>
+          </button>
         </div>
       </main>
       {showCreate && <CreateProjectSheet onClose={() => setShowCreate(false)} />}
