@@ -18,8 +18,8 @@ export function TagColorFilterSheet({
   onClose: () => void
 }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop tag-filter-backdrop" onClick={onClose}>
+      <div className="modal-sheet tag-filter-sheet" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ margin: 0 }}>Färglägg efter materialtagg</h2>
         {tags.length === 0 ? (
           <p className="field-hint">Inga materialtaggar i projektet ännu.</p>

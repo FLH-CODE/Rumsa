@@ -240,3 +240,15 @@ export function HomeIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/** Två överlappande rektanglar – symbolen för att kopiera in ett typrums data EN gång utan att
+ * koppla rummet till det (se "Använd en gång" i RoomInventorySheet.tsx), till skillnad från
+ * LinkIcon som står för en stående koppling. */
+export function CopyOnceIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="4" y="8" width="12" height="12" rx="1.5" />
+      <path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4H18a1.5 1.5 0 0 1 1.5 1.5V16a1.5 1.5 0 0 1-1.5 1.5H16" />
+    </svg>
+  )
+}

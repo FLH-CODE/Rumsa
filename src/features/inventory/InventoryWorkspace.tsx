@@ -5,10 +5,12 @@ import {
   DragOverlay,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -29,6 +31,22 @@ import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab,
 import { getLastActiveTab, setLastActiveTab } from './activeTabStore'
 
 type DropIndicator = { category: RoomCategory; index: number }
+
+/**
+ * `category-${category}`s droppzon (se CategoryContent) omsluter HELA materiallistan, som ett
+ * sista-utväg-mål för att kunna släppa en tagg i en tom lista. Med bara `closestCenter` konkurrerade
+ * den stora omslutande ytan om träffen mot sina egna, mycket mindre barn (varje enskilt materials
+ * egen droppzon via useSortable) – ytans CENTER kunde ligga närmare pekaren än en specifik rads eget
+ * center även när pekaren tydligt svävade över just den raden, vilket gjorde släpp mitt i eller
+ * längst upp i listan opålitligt. `pointerWithin` löser det (den föredrar den minsta ytan pekaren
+ * faktiskt befinner sig inom, dvs. den specifika raden framför den stora omslutande ytan) men ger
+ * inga träffar alls när pekaren råkar vara i en lucka MELLAN två rader eller under den sista raden –
+ * då faller vi tillbaka på `closestCenter` istället för att tappa bort träffen helt.
+ */
+const collisionDetectionStrategy: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args)
+  return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args)
+}
 
 export type FunktionFields = {
   antalPersoner: string
@@ -94,10 +112,16 @@ export function InventoryWorkspace({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
+  // Sparas via en effekt (inte bara inne i selectTab) så det alltid är det SENAST VISADE
+  // arbetsläget som minns sig – oavsett hur rumskortet sedan stängs (Klar, Avbryt, Escape eller
+  // bakgrundsklick), inte bara när man själv hinner klicka en flik innan man stänger.
+  useEffect(() => {
+    setLastActiveTab(activeTab)
+  }, [activeTab])
+
   const selectTab = (tab: RoomTab) => {
     setShowSummary(false)
     setActiveTab(tab)
-    setLastActiveTab(tab)
   }
 
   const insertMaterial = (category: RoomCategory, index: number, tag: MaterialTag) =>
@@ -194,7 +218,7 @@ export function InventoryWorkspace({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetectionStrategy}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -414,13 +438,18 @@ function CategoryContent({
     [projectId, category],
   )
   const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
+  // Bara en droppzon när listan är TOM (inget annat att släppa på då) – hade den omslutit hela
+  // listan hela tiden hade den, med pointerWithin (se collisionDetectionStrategy), konkurrerat om
+  // varje släpp i LUCKAN mellan två rader (som bara ligger inom den stora omslutande ytan, inte
+  // inom någon av de enskilda radernas egna, mindre droppzoner) och alltid "vunnit" det med index 0,
+  // oavsett var i listan luckan faktiskt låg.
   const { setNodeRef } = useDroppable({ id: `category-${category}`, data: { type: 'category', category }, disabled: readOnly })
 
   return (
     <div className="category-column">
-      <div ref={setNodeRef} className="material-flat-list">
+      <div className="material-flat-list">
         {entry.materials.length === 0 && (
-          <p className="field-hint category-empty">
+          <p ref={setNodeRef} className="field-hint category-empty">
             {readOnly ? (
               'Inget material angivet.'
             ) : (

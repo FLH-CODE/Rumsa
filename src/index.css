@@ -892,6 +892,26 @@ textarea:focus-visible {
   }
 }
 
+/* Samma mönster som rumskortet (se .inventory-sheet ovan) för "Material och inventarier" (när den
+   öppnas som popup ovanpå ritningsvisaren, se TagsOverviewPanel) och "Färglägg efter materialtagg"
+   – på en smal skärm är de annars snarlikt stora som hela skärmen ändå, men utan att faktiskt
+   utnyttja den (kvarvarande marginal/rundade hörn) och utan rumskortets tydliga, fasta känsla. */
+@media (max-width: 640px) {
+  .tags-overview-backdrop,
+  .tag-filter-backdrop {
+    padding: 0;
+  }
+
+  .tags-overview-sheet,
+  .tag-filter-sheet {
+    max-width: 100%;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
 /* Lite bredare på dator för att få plats med ikonral + innehåll + taggpalett sida vid sida –
    men inte bredare än så, annars blir det mest tomt vitt runt det numera ganska kompakta
    innehållet. */
@@ -995,7 +1015,21 @@ textarea:focus-visible {
 
 .room-type-menu-row-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Ikonknappar istället för textknappar ("Använd en gång"/"Koppla") – de senare fick typrummets
+   namn att radbrytas och klämmas ihop på smala skärmar. */
+.room-type-menu-row-btn {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border-radius: 50%;
+}
+
+.room-type-menu-row-btn:active {
+  background: var(--color-bg);
+  color: var(--color-primary);
 }
 
 .room-type-menu-create {

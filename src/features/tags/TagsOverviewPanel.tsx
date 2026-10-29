@@ -131,7 +131,7 @@ export function TagsOverviewPanel({
 
   if (variant === 'sheet') {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-backdrop tags-overview-backdrop" onClick={onClose}>
         <div className="modal-sheet tags-overview-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="tags-overview-sheet-header">
             <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Material och inventarier</h2>
@@ -140,6 +140,11 @@ export function TagsOverviewPanel({
             </button>
           </div>
           {categorySections}
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={onClose}>
+              Stäng
+            </button>
+          </div>
         </div>
         {tagEditSheet}
       </div>

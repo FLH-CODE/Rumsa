@@ -8,7 +8,7 @@ import { deleteRoomCascade, deleteMaterialTagCascade } from '../data/cascadeDele
 import { linkRoomToType, unlinkRoomFromType, applyRoomTypeDataOnce, createRoomTypeFromRoom } from './roomTypeLink'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
-import { LinkIcon, LinkOffIcon, EraserIcon } from '../../components/icons'
+import { LinkIcon, LinkOffIcon, EraserIcon, CopyOnceIcon } from '../../components/icons'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -331,11 +331,23 @@ export function RoomInventorySheet({
                       <div key={type.id} className="room-type-menu-row">
                         <span className="room-type-menu-row-name">{type.name}</span>
                         <div className="room-type-menu-row-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => void handleApplyTypeOnce(type)}>
-                            Använd en gång
+                          <button
+                            type="button"
+                            className="room-type-menu-row-btn tap-target"
+                            onClick={() => void handleApplyTypeOnce(type)}
+                            aria-label={`Använd ${type.name} en gång`}
+                            title="Använd en gång"
+                          >
+                            <CopyOnceIcon width={20} height={20} />
                           </button>
-                          <button type="button" className="btn btn-secondary" onClick={() => void handleLinkType(type)}>
-                            Koppla
+                          <button
+                            type="button"
+                            className="room-type-menu-row-btn tap-target"
+                            onClick={() => void handleLinkType(type)}
+                            aria-label={`Koppla till ${type.name}`}
+                            title="Koppla"
+                          >
+                            <LinkIcon width={20} height={20} />
                           </button>
                         </div>
                       </div>

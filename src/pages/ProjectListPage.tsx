@@ -6,25 +6,12 @@ import { deleteProjectCascade } from '../features/data/cascadeDelete'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
 import { FullscreenButton } from '../components/FullscreenButton'
-import { TrashIcon, ChevronRightIcon, PlusIcon, ExportIcon } from '../components/icons'
+import { TrashIcon, ChevronRightIcon, PlusIcon } from '../components/icons'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray(), [])
   const [showCreate, setShowCreate] = useState(false)
-  const [backingUp, setBackingUp] = useState(false)
-
-  const handleBackup = async () => {
-    setBackingUp(true)
-    try {
-      // Laddas bara in när man faktiskt säkerhetskopierar – jszip är tungt och behövs inte i
-      // grundappen (samma mönster som Excel-exporten).
-      const { exportBackup } = await import('../features/backup/exportBackup')
-      await exportBackup()
-    } finally {
-      setBackingUp(false)
-    }
-  }
 
   const handleDelete = async (project: Project) => {
     const confirmed = await confirmDialog(
@@ -39,18 +26,7 @@ export default function ProjectListPage() {
     <>
       <header className="app-header">
         <h1>Rumsa</h1>
-        <div style={{ display: 'flex', gap: 2 }}>
-          <FullscreenButton />
-          <button
-            className="btn-ghost btn tap-target"
-            onClick={() => void handleBackup()}
-            disabled={backingUp}
-            aria-label={backingUp ? 'Skapar säkerhetskopia…' : 'Säkerhetskopiera all data'}
-            title="Säkerhetskopiera all data"
-          >
-            <ExportIcon width={20} height={20} />
-          </button>
-        </div>
+        <FullscreenButton />
       </header>
       <main className="app-main">
         <div className="card-list">
