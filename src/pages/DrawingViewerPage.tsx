@@ -115,13 +115,16 @@ export default function DrawingViewerPage() {
   const handleCanvasTap = async (pdfX: number, pdfY: number) => {
     if (!currentPage || !projectId) return
     setAddRoomMode(false)
+    // Förifyllt istället för tomt – annars tolkas rummet som "aldrig namngivet" och raderas tyst
+    // igen av RoomInventorySheet om man stänger kortet utan att skriva något (se dess closeSheet).
+    const { roomNumber, roomName } = await generateDefaultRoomIdentity(projectId)
     const newRoom: Room = {
       id: createId(),
       projectId,
       levelId: currentPage.levelId,
       drawingPageId: currentPage.id,
-      roomNumber: '',
-      roomName: '',
+      roomNumber,
+      roomName,
       tagX: pdfX,
       tagY: pdfY,
       templateId: null,
@@ -392,6 +395,16 @@ function SortableThumb({
       <span className="viewer-thumb-label">{label}</span>
     </button>
   )
+}
+
+/** Nästa lediga "N<n>"/"Nytt rum <n>" – körs vid manuellt tillagda rum så att ett rum aldrig
+ * startar namnlöst (och därmed riskerar att tyst raderas igen, se closeSheet i
+ * RoomInventorySheet.tsx, om man stänger kortet utan att hinna skriva ett eget nummer). */
+async function generateDefaultRoomIdentity(projectId: string): Promise<{ roomNumber: string; roomName: string }> {
+  const existingNumbers = new Set((await db.rooms.where('projectId').equals(projectId).toArray()).map((r) => r.roomNumber))
+  let n = 1
+  while (existingNumbers.has(`N${n}`)) n++
+  return { roomNumber: `N${n}`, roomName: `Nytt rum ${n}` }
 }
 
 function sortPages(pages: DrawingPage[] | undefined, levels: Level[] | undefined): DrawingPage[] {

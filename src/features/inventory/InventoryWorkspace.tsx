@@ -13,6 +13,8 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { db, createId, type CategoryEntry, type MaterialReference, type MaterialTag, type RoomCategory } from '../../db'
 import { RowTextInput } from './RowTextInput'
 import { RoomPerspectiveNav } from './RoomPerspectiveNav'
@@ -125,17 +127,10 @@ export function InventoryWorkspace({
 
   // Flyttar ett REDAN applicerat material till ett nytt index inom samma kategori – skiljs från
   // insertMaterial (som lägger till ett nytt material från paletten) i handleDragEnd via
-  // data.type ('material' kontra 'tag').
+  // data.type ('material' kontra 'tag'). arrayMove (samma hjälpfunktion som sidlistan i
+  // DrawingViewerPage.tsx använder) sköter indexjusteringen – ingen egen off-by-one-räkning behövs.
   const moveMaterial = (category: RoomCategory, fromIndex: number, toIndex: number) =>
-    setCategoryEntry(category, (entry) => {
-      const materials = [...entry.materials]
-      const [moved] = materials.splice(fromIndex, 1)
-      // Index:et som indikatorn pekar på räknas i listan FÖRE flytten – har materialet redan
-      // plockats bort från en tidigare position krymper allt efter den med ett steg.
-      const insertAt = Math.max(0, Math.min(fromIndex < toIndex ? toIndex - 1 : toIndex, materials.length))
-      materials.splice(insertAt, 0, moved)
-      return { ...entry, materials }
-    })
+    setCategoryEntry(category, (entry) => ({ ...entry, materials: arrayMove(entry.materials, fromIndex, toIndex) }))
 
   const removeMaterial = async (category: RoomCategory, ref: MaterialReference, tag: MaterialTag | undefined) => {
     if (!(await confirmDialog(`Ta bort ${tagLabel(tag)}?`, { danger: true }))) return
@@ -150,13 +145,19 @@ export function InventoryWorkspace({
     else if (data?.type === 'material') setActiveDrag({ kind: 'material', tag: data.tag as MaterialTag | undefined })
   }
 
-  // Visar exakt VAR taggen (eller det omflyttade materialet) hamnar om man släpper nu (en tunn
-  // linje mellan två befintliga material) istället för att bara tona hela listan – annars var det
-  // otydligt om släppet skulle lägga till/flytta taggen sist, in någonstans mitt i, eller inget alls.
+  // Visar exakt VAR en ny tagg (dragen in från paletten) hamnar om man släpper nu (en tunn linje
+  // mellan två befintliga material) istället för att bara tona hela listan – annars var det
+  // otydligt om släppet skulle lägga till taggen sist, in någonstans mitt i, eller inget alls. Att
+  // flytta ett REDAN applicerat material om sig självt hanteras istället helt av SortableContext/
+  // useSortable (se MaterialEntry) – de grannraderna glider undan live under dragningen, vilket är
+  // tydligare än en statisk linje och inte kräver någon egen indexräkning här.
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
-    const activeType = active.data.current?.type
-    if (!over || (activeType !== 'tag' && activeType !== 'material')) {
+    if (active.data.current?.type !== 'tag') {
+      setDropIndicator(null)
+      return
+    }
+    if (!over) {
       setDropIndicator(null)
       return
     }
@@ -165,7 +166,7 @@ export function InventoryWorkspace({
       setDropIndicator({ category: overData.category, index: 0 })
       return
     }
-    if (overData?.type === 'slot' && overData.category && typeof overData.index === 'number') {
+    if (overData?.type === 'material' && overData.category && typeof overData.index === 'number') {
       const draggedRect = active.rect.current.translated
       const overRect = over.rect
       const draggedCenterY = draggedRect ? draggedRect.top + draggedRect.height / 2 : overRect.top + overRect.height / 2
@@ -181,12 +182,17 @@ export function InventoryWorkspace({
     setActiveDrag(null)
     const indicator = dropIndicator
     setDropIndicator(null)
-    const activeData = event.active.data.current
-    if (!indicator) return
+    const { active, over } = event
+    const activeData = active.data.current
     if (activeData?.type === 'tag') {
-      insertMaterial(indicator.category, indicator.index, activeData.tag as MaterialTag)
-    } else if (activeData?.type === 'material' && typeof activeData.sourceIndex === 'number' && activeData.category === indicator.category) {
-      moveMaterial(indicator.category, activeData.sourceIndex as number, indicator.index)
+      if (indicator) insertMaterial(indicator.category, indicator.index, activeData.tag as MaterialTag)
+      return
+    }
+    if (activeData?.type === 'material' && over && active.id !== over.id) {
+      const overData = over.data.current as { type?: string; category?: RoomCategory; index?: number } | undefined
+      if (overData && overData.category === activeData.category && typeof overData.index === 'number' && typeof activeData.index === 'number') {
+        moveMaterial(activeData.category, activeData.index, overData.index)
+      }
     }
   }
 
@@ -205,17 +211,19 @@ export function InventoryWorkspace({
       <div className="room-workspace">
         <div className="room-nav-row">
           <RoomPerspectiveNav active={isRoomCategory(activeTab) ? activeTab : null} onSelect={selectTab} filled={filled} />
-          <CategoryRail tabs={railTabs} active={activeTab} filled={filled} onSelect={selectTab} />
+          <div className="rail-group">
+            <CategoryRail tabs={railTabs} active={activeTab} filled={filled} onSelect={selectTab} />
+            <button
+              type="button"
+              className={`category-rail-btn summary-rail-btn${showSummary ? ' active' : ''}`}
+              onClick={() => setShowSummary((prev) => !prev)}
+              aria-label={showSummary ? 'Dölj sammanfattning' : 'Visa sammanfattning'}
+              title={showSummary ? 'Dölj sammanfattning' : 'Visa sammanfattning'}
+            >
+              <SummaryIcon width={20} height={20} />
+            </button>
+          </div>
         </div>
-
-        <button
-          type="button"
-          className={`summary-toggle-btn${showSummary ? ' active' : ''}`}
-          onClick={() => setShowSummary((prev) => !prev)}
-        >
-          <SummaryIcon width={18} height={18} />
-          {showSummary ? 'Dölj sammanfattning' : 'Visa sammanfattning'}
-        </button>
 
         {showSummary ? (
           <RoomSummary projectId={projectId} categories={categories} funktion={funktion} />
@@ -373,10 +381,13 @@ function CategoryRail({
             type="button"
             className={`category-rail-btn${active === tab ? ' active' : ''}`}
             onClick={() => onSelect(tab)}
-            aria-label={CATEGORY_LABEL[tab]}
+            aria-label={`${CATEGORY_LABEL[tab]}${filled?.[tab] ? ' – ifyllt' : ''}`}
             title={CATEGORY_LABEL[tab]}
           >
             <Icon width={20} height={20} strokeWidth={filled?.[tab] ? 3 : 2} />
+            {/* Dot istället för (eller utöver) det tjockare strecket – syns tydligt oavsett om
+               ikonen just då är markerad (vit på blå botten) eller i sin vanliga, ljusgrå ton. */}
+            {filled?.[tab] && <span className="category-rail-dot" aria-hidden="true" />}
           </button>
         )
       })}
@@ -421,25 +432,33 @@ function CategoryContent({
       <div ref={setNodeRef} className="material-flat-list">
         {entry.materials.length === 0 && (
           <p className="field-hint category-empty">
-            {readOnly ? 'Inget material angivet.' : 'Tryck eller dra en tagg hit från listan till höger.'}
+            {readOnly ? (
+              'Inget material angivet.'
+            ) : (
+              <>
+                Dra en tagg hit från listan till höger <span aria-hidden="true">←</span>
+              </>
+            )}
           </p>
         )}
-        {entry.materials.map((ref, index) => (
-          <Fragment key={ref.id}>
-            {dropIndicatorIndex === index && <div className="insert-indicator" />}
-            <MaterialEntry
-              index={index}
-              category={category}
-              reference={ref}
-              tag={tagById.get(ref.tagId)}
-              projectId={projectId}
-              readOnly={readOnly}
-              onRemove={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
-              onNoteChange={(value) => onNoteChange(ref.id, value)}
-              onAntalChange={(antal) => onAntalChange(ref.id, antal)}
-            />
-          </Fragment>
-        ))}
+        <SortableContext items={entry.materials.map((ref) => `entry-${ref.id}`)} strategy={verticalListSortingStrategy}>
+          {entry.materials.map((ref, index) => (
+            <Fragment key={ref.id}>
+              {dropIndicatorIndex === index && <div className="insert-indicator" />}
+              <MaterialEntry
+                index={index}
+                category={category}
+                reference={ref}
+                tag={tagById.get(ref.tagId)}
+                projectId={projectId}
+                readOnly={readOnly}
+                onRemove={() => onRemoveMaterial(ref, tagById.get(ref.tagId))}
+                onNoteChange={(value) => onNoteChange(ref.id, value)}
+                onAntalChange={(antal) => onAntalChange(ref.id, antal)}
+              />
+            </Fragment>
+          ))}
+        </SortableContext>
         {dropIndicatorIndex === entry.materials.length && entry.materials.length > 0 && <div className="insert-indicator" />}
       </div>
       {readOnly ? (
@@ -502,16 +521,14 @@ function MaterialEntry({
   onNoteChange: (value: string) => void
   onAntalChange: (antal: number) => void
 }) {
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: `slot-${category}-${reference.id}`,
-    data: { type: 'slot', category, index },
-    disabled: readOnly,
-  })
   // Draghandtaget (GripIcon) är den enda delen av raden som faktiskt startar en dragning – annars
   // skulle ett tryck på anteckningsikonen eller ✕ råka tolkas som att man börjat dra om materialet.
-  const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({
+  // useSortable (istället för en egen useDraggable+useDroppable-kombination) ger grannraderna en
+  // live glid-animation undan under dragningen – se handleDragOver/handleDragEnd ovan för varför
+  // det ersatte den tidigare statiska infogningslinjen för just omflyttning.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `entry-${reference.id}`,
-    data: { type: 'material', category, sourceIndex: index, tag },
+    data: { type: 'material', category, index, tag },
     disabled: readOnly,
   })
   // Anteckningen är alltid synlig som vanlig text – bara ikonen (de tre linjerna) fäller ut
@@ -536,10 +553,10 @@ function MaterialEntry({
   return (
     <div
       ref={(node) => {
-        setDroppableRef(node)
-        setDraggableRef(node)
+        setNodeRef(node)
         containerRef.current = node
       }}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`material-entry${isDragging ? ' dragging' : ''}`}
     >
       <div className="material-entry-head">
@@ -621,6 +638,7 @@ function TagPalette({
 
   return (
     <div className="tag-palette">
+      <h3 className="active-category-label tag-palette-heading">Taggar</h3>
       <div className="tag-palette-list">
         {tags?.map((tag) => <PaletteTag key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />)}
       </div>

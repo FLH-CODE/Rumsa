@@ -5,7 +5,7 @@ import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord, emptyCategories } from './defaultTemplate'
 import { InventoryWorkspace } from './InventoryWorkspace'
 import { deleteRoomCascade, deleteMaterialTagCascade } from '../data/cascadeDelete'
-import { linkRoomToType, unlinkRoomFromType } from './roomTypeLink'
+import { linkRoomToType, unlinkRoomFromType, applyRoomTypeDataOnce, createRoomTypeFromRoom } from './roomTypeLink'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape } from '../../utils/keyboardShortcuts'
 import { LinkIcon, LinkOffIcon, EraserIcon } from '../../components/icons'
@@ -39,6 +39,9 @@ export function RoomInventorySheet({
   const [roomNumber, setRoomNumber] = useState(room.roomNumber)
   const [roomName, setRoomName] = useState(room.roomName)
   const [showTypeMenu, setShowTypeMenu] = useState(false)
+  // Visas kort i typrumsmenyn efter "Skapa typrum härifrån" – den nya posten dyker annars inte
+  // upp där förrän man råkar öppna menyn på nytt, vilket gjorde det otydligt att något hänt alls.
+  const [typeMenuMessage, setTypeMenuMessage] = useState<string | null>(null)
 
   // Taggar som skapats i den här sessionen (i rumskortets egen taggpalett) – städas bort igen om
   // man trycker Avbryt istället för Klar, så ett avbrutet rumskort inte ändå lämnar kvar nya
@@ -165,6 +168,35 @@ export function RoomInventorySheet({
     setShowTypeMenu(false)
   }
 
+  // Kopierar typrummets data en gång, UTAN att koppla rummet till det – till skillnad från
+  // handleLinkType skapas ingen stående koppling, så rummet kan avvika direkt efteråt.
+  const handleApplyTypeOnce = async (type: RoomType) => {
+    if (!record) return
+    const confirmed = await confirmDialog(
+      `Kopiera in all data från typrummet "${type.name}" i rummet? Rummets befintliga data skrivs över, men rummet kopplas INTE till typrummet.`,
+      { danger: true, confirmLabel: 'Skriv över' },
+    )
+    if (!confirmed) return
+    await applyRoomTypeDataOnce(room, type)
+    // Se handleUnlinkType nedan – satt direkt istället för nollställd, av samma anledning.
+    setLoaded({
+      recordId: record.id,
+      categories: type.categories,
+      antalPersoner: type.antalPersoner,
+      funktionsbeskrivning: type.funktionsbeskrivning,
+      dagsljus: type.dagsljus,
+      storlek: type.storlek,
+    })
+    setShowTypeMenu(false)
+  }
+
+  // Skapar ett nytt typrum i projektets bibliotek utifrån rummets NUVARANDE data – en
+  // engångskopia (inte en koppling), så man kan göra en mall av ett rum man redan fyllt i.
+  const handleCreateTypeFromRoom = async () => {
+    const newType = await createRoomTypeFromRoom(room)
+    setTypeMenuMessage(`Typrummet "${newType.name}" har skapats. Hantera det under Typrum i projektets inställningar.`)
+  }
+
   const handleUnlinkType = async () => {
     if (!linkedType || !record) return
     await unlinkRoomFromType(room, linkedType)
@@ -255,7 +287,10 @@ export function RoomInventorySheet({
             <button
               type="button"
               className="btn-ghost btn tap-target room-type-link-btn"
-              onClick={() => setShowTypeMenu((open) => !open)}
+              onClick={() => {
+                setShowTypeMenu((open) => !open)
+                setTypeMenuMessage(null)
+              }}
               aria-label={linkedType ? `Kopplad till typrummet ${linkedType.name}` : 'Koppla till typrum'}
               title={linkedType ? `Kopplad till typrummet ${linkedType.name}` : 'Koppla till typrum'}
             >
@@ -282,20 +317,35 @@ export function RoomInventorySheet({
               </>
             ) : (
               <>
-                <p className="field-hint">Koppla rummet till ett typrum för att ärva dess data:</p>
+                <p className="field-hint">
+                  Koppla rummet till ett typrum för att ärva dess data, eller använd ett typrums data en gång utan att binda
+                  rummet till det:
+                </p>
                 {roomTypes === undefined ? (
                   <p className="field-hint">Laddar…</p>
                 ) : roomTypes.length === 0 ? (
-                  <p className="field-hint">Inga typrum skapade ännu. Skapa dem under Typrum i projektets inställningar.</p>
+                  <p className="field-hint">Inga typrum skapade ännu.</p>
                 ) : (
                   <div className="room-type-menu-list">
                     {roomTypes.map((type) => (
-                      <button key={type.id} type="button" className="btn btn-secondary" onClick={() => void handleLinkType(type)}>
-                        {type.name}
-                      </button>
+                      <div key={type.id} className="room-type-menu-row">
+                        <span className="room-type-menu-row-name">{type.name}</span>
+                        <div className="room-type-menu-row-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => void handleApplyTypeOnce(type)}>
+                            Använd en gång
+                          </button>
+                          <button type="button" className="btn btn-secondary" onClick={() => void handleLinkType(type)}>
+                            Koppla
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
+                <button type="button" className="btn btn-secondary room-type-menu-create" onClick={() => void handleCreateTypeFromRoom()}>
+                  + Skapa typrum från rummet
+                </button>
+                {typeMenuMessage && <p className="field-hint">{typeMenuMessage}</p>}
               </>
             )}
           </div>

@@ -112,9 +112,15 @@ export function PdfPageCanvas({
     if (!addMode || !viewport || !onCanvasTap) return
     const canvas = canvasRef.current
     if (!canvas) return
+    // getBoundingClientRect() returns the canvas's on-screen box AFTER the ancestor
+    // TransformWrapper's pan/zoom CSS transform is applied, so a click offset measured against it
+    // is in zoomed screen pixels – but `viewport` (built at the fit-to-screen scale, before any
+    // pan/zoom) expects plain, un-zoomed CSS pixels. Skipping this division placed new rooms
+    // wherever the cursor happened to be in the zoomed-out coordinate space instead of under the
+    // actual tap, worse the further in the user had zoomed.
     const rect = canvas.getBoundingClientRect()
-    const cssX = e.clientX - rect.left
-    const cssY = e.clientY - rect.top
+    const cssX = (e.clientX - rect.left) / zoomScale
+    const cssY = (e.clientY - rect.top) / zoomScale
     const [pdfX, pdfY] = viewport.convertToPdfPoint(cssX, cssY) as [number, number]
     onCanvasTap(pdfX, pdfY)
   }

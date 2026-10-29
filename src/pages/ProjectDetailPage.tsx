@@ -22,6 +22,14 @@ import {
   BackIcon,
 } from '../components/icons'
 
+/** Format-byten som är garanterat säkra även efter att ritningar laddats upp: målformatet är en
+ * strikt superset av källformatet (samma siffer-del, men suffixet är valfritt/vidare), så ett
+ * rumsnummer som redan matchade källformatet matchar alltid målformatet också – se
+ * hasUploadedDrawings-kommentaren nedan för varför det annars är låst. */
+const SAFE_PATTERN_UPGRADES: Record<string, string[]> = {
+  '^\\d{3,4}$': ['^\\d{3,4}[A-ZÅÄÖ]{0,4}$'],
+}
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -165,8 +173,12 @@ export default function ProjectDetailPage() {
   const roomCount = rooms?.length ?? 0
   // Att byta format efter att ritningar laddats upp (och därmed redan rumstaggade via det gamla
   // formatet) skulle göra att redan taggade rum inte längre matchas vid nästa omdetektering –
-  // se handlePatternChange/syncRoomsForPage – och i praktiken förstöra allt ifyllt arbete.
+  // se handlePatternChange/syncRoomsForPage – och i praktiken förstöra allt ifyllt arbete. Ett
+  // UNDANTAG: att byta till ett strikt BREDARE format (se SAFE_PATTERN_UPGRADES) är ofarligt,
+  // eftersom varje rumsnummer som redan matchade det smalare formatet garanterat matchar det
+  // bredare också – bytet kan då bara upptäcka nya rum, aldrig tappa bort befintliga.
   const hasUploadedDrawings = (drawings?.length ?? 0) > 0
+  const safeUpgradeTargets = SAFE_PATTERN_UPGRADES[project.roomNumberPattern] ?? []
   const currentPatternLabel =
     ROOM_NUMBER_PRESETS.find((p) => p.value === project.roomNumberPattern)?.shortLabel ?? 'Anpassat'
 
@@ -309,20 +321,27 @@ export default function ProjectDetailPage() {
               <select
                 id="room-pattern"
                 value={project.roomNumberPattern}
-                disabled={redetecting || hasUploadedDrawings}
+                disabled={redetecting}
                 onChange={(e) => void handlePatternChange(e.target.value)}
               >
-                {ROOM_NUMBER_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
+                {ROOM_NUMBER_PRESETS.map((p) => {
+                  const isCurrent = p.value === project.roomNumberPattern
+                  const locked = hasUploadedDrawings && !isCurrent && !safeUpgradeTargets.includes(p.value)
+                  return (
+                    <option key={p.value} value={p.value} disabled={locked}>
+                      {p.label}
+                      {locked ? ' (låst)' : ''}
+                    </option>
+                  )
+                })}
               </select>
               <span className="field-hint">
                 {redetecting
                   ? 'Söker igenom uppladdade ritningar efter det nya formatet…'
                   : hasUploadedDrawings
-                    ? 'Går inte att ändra efter att ritningar laddats upp – ett annat format skulle göra att redan taggade rum inte längre känns igen och förstöra det ifyllda arbetet.'
+                    ? safeUpgradeTargets.length > 0
+                      ? 'Redan taggade rum påverkas inte av att byta till ett bredare format – det kan bara hitta nya rum, aldrig tappa bort befintliga. Övriga format (låst) skulle kunna göra det och går därför inte att välja.'
+                      : 'Går inte att ändra efter att ritningar laddats upp – ett annat format skulle göra att redan taggade rum inte längre känns igen och förstöra det ifyllda arbetet.'
                     : 'Styr hur appen känner igen rumsnummer. Uppdaterar automatiskt alla uppladdade ritningar vid ändring.'}
               </span>
             </div>

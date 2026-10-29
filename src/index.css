@@ -383,7 +383,7 @@ textarea:focus-visible {
 
 .field textarea {
   font-family: inherit;
-  resize: vertical;
+  resize: none;
 }
 
 .field input:read-only,
@@ -925,6 +925,33 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.room-type-menu-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.room-type-menu-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.room-type-menu-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.room-type-menu-create {
+  align-self: flex-start;
+}
+
 .inventory-room-number,
 .inventory-room-name {
   border: none;
@@ -986,32 +1013,38 @@ textarea:focus-visible {
   align-items: stretch;
   gap: 16px;
   /* Säkerhetsnät för mycket smala skärmar – annars skulle paletten kunna klippas bort helt
-     osynligt istället för att bara krävas lite horisontell scroll för att nå. */
+     osynligt istället för att bara krävas lite horisontell scroll för att nå. Taggarnas egen text
+     bryts numera alltid inom paletten (se .palette-tag-code/.palette-tag-desc) så den här scrollen
+     ska i praktiken aldrig behöva triggas av dem specifikt. */
   overflow-x: auto;
 }
 
-/* Under ikonralen, egen rad över hela kortets bredd – samma mönster som ralj:en i övrigt, så den
-   läses som "ännu ett arbetsläge" snarare än en fristående knapp. */
-.summary-toggle-btn {
+/* Grupperar ikonralen och sammanfattningsknappen i en egen kolumn, under varandra, till höger om
+   perspektivillustrationen – så sammanfattningen läses som "ännu ett arbetsläge" i samma
+   ikonsystem istället för en fristående textknapp som tar en egen rad över hela kortet. */
+.rail-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
-  align-self: flex-start;
-  margin-top: 8px;
-  padding: 6px 4px;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
 }
 
-.summary-toggle-btn.active {
-  color: var(--color-primary);
+.summary-rail-btn.active {
+  background: rgba(22, 78, 99, 0.38);
+  color: #ffffff;
 }
 
 .room-summary {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* En linje mellan varje huvudkategori (Ytskikt/Utrustning/Övrigt/Funktion) istället för bara
+   luft – annars flöt särskilt de tomma "Inget ifyllt."-sektionerna ihop till en enda oavbruten
+   textmassa utan att det gick att se var en kategori slutade och nästa började. */
+.summary-section:not(:first-child) {
+  border-top: 1px solid var(--color-border);
+  padding-top: 14px;
 }
 
 .summary-section {
@@ -1062,6 +1095,7 @@ textarea:focus-visible {
    sina ytor, så ikonralen läses som en fortsättning av samma kontrollsystem istället för en
    separat, vitt inramad komponent. */
 .category-rail-btn {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 9px;
@@ -1082,6 +1116,23 @@ textarea:focus-visible {
   /* Vit istället för samma ljusgrå som strecket annars har – den ljusgrå tonen gav nästan ingen
      kontrast mot highlight-fyllningen och ikonen syntes knappt. */
   color: #ffffff;
+}
+
+/* Extra, otvetydig markering utöver ikonens tjockare streck (se CategoryRail) – en liten prick i
+   hörnet syns lika tydligt oavsett om knappen just då är markerad/vit-på-blått eller i sin vanliga
+   ljusgrå ton, vilket bara streckbredden inte alltid gjorde. */
+.category-rail-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.category-rail-btn.active .category-rail-dot {
+  background: #ffffff;
 }
 
 .room-workspace-main {
@@ -1143,15 +1194,11 @@ textarea:focus-visible {
   min-height: 40px;
 }
 
-/* Streckad ram runt tomt-läget – gör tydligt att det är EN yta man kan släppa en tagg inom,
-   inte bara en rad text bland annat innehåll. */
 .category-empty {
   color: var(--color-text-muted);
   font-size: 0.85rem;
   text-align: center;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 16px 0;
 }
 
 /* En tydlig linje som visar exakt var en dragen tagg hamnar (mellan två befintliga material)
@@ -1314,12 +1361,18 @@ textarea:focus-visible {
   gap: 2px;
   max-height: 60vh;
   overflow-y: auto;
+  /* Säkerhetsnät: taggtextens egen word-break (se .palette-tag-code/.palette-tag-desc) ska göra
+     det onödigt, men utan detta kunde en enda obruten lång textsträng ändå tvinga fram en
+     horisontell scrollbar här – som i sin tur, eftersom .room-workspace-body har overflow-x:auto,
+     visade en synlig scrollbar långt nedanför själva taggen den hörde till. */
+  overflow-x: hidden;
 }
 
 .palette-tag {
   display: flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
   text-align: left;
   padding: 2px 0;
   border-radius: 8px;
@@ -1345,6 +1398,7 @@ textarea:focus-visible {
   align-items: flex-start;
   gap: 2px;
   width: 100%;
+  min-width: 0;
   padding: 6px 9px;
   border-radius: 10px;
   transition: filter 0.1s ease, transform 0.1s ease;
@@ -1353,6 +1407,16 @@ textarea:focus-visible {
 .palette-tag:hover .palette-tag-chip {
   filter: brightness(0.93);
   transform: scale(1.02);
+}
+
+/* word-break (inte bara en max-width) eftersom en lång kod/beskrivning utan mellanslag annars
+   inte bryts alls – det var den egentliga orsaken till att en enstaka lång tagg kunde tvinga fram
+   en horisontell scrollbar i hela rumskortet (se .tag-palette-list ovan). */
+.palette-tag-code,
+.palette-tag-desc {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .palette-tag-code {
@@ -1364,6 +1428,10 @@ textarea:focus-visible {
   font-size: 0.76rem;
   opacity: 0.8;
   text-align: left;
+}
+
+.tag-palette-heading {
+  margin-bottom: 10px;
 }
 
 /* På smalare skärmar (telefon) krymper ralj/palett något så den smala mittenkolumnen ändå får
@@ -1517,7 +1585,7 @@ textarea:focus-visible {
 }
 
 .material-autocomplete-field textarea {
-  resize: vertical;
+  resize: none;
 }
 
 .material-autocomplete-field.multiline {

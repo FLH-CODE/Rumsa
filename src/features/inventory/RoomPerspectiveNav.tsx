@@ -4,6 +4,10 @@ import { CATEGORY_LABEL } from './categories'
 
 const STROKE = '#b8c2c7'
 const HIGHLIGHT = 'rgba(22, 78, 99, 0.38)'
+// Samma färg som HIGHLIGHT fast solid – en tjockare linje i samma ljusgrå ton (STROKE) syntes för
+// otydligt som "ifyllt"-markering, särskilt i den här storleken. Färgbytet gör skillnaden tydlig
+// även utan att jämföra tjockleken direkt mot en tom yta.
+const FILLED_STROKE = '#164e63'
 
 /** Ett enda blad, hämtat rakt av ur den handritade/vektoriserade principskissen (en spetsig,
  * "ögonformad" kurva) – återanvänds fyra gånger (en per väderstreck) via samma transformer som i
@@ -47,12 +51,15 @@ export function RoomPerspectiveNav({
     onKeyDown: handleKeyDown(category),
   })
 
-  const petalProps = (category: RoomCategory) => ({
-    d: PETAL_D,
-    fill: fill(category),
-    stroke: STROKE,
-    strokeWidth: filled?.[category] ? 4 : 2,
-  })
+  const petalProps = (category: RoomCategory) => {
+    const isFilled = filled?.[category]
+    return {
+      d: PETAL_D,
+      fill: fill(category),
+      stroke: isFilled ? FILLED_STROKE : STROKE,
+      strokeWidth: isFilled ? 3.5 : 2,
+    }
+  }
 
   return (
     <svg viewBox="460 630 330 330" className="room-perspective-nav">
