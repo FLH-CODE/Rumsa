@@ -185,6 +185,14 @@ export function InventoryWorkspace({
       setDropIndicator({ category: overData.category, index: 0 })
       return
     }
+    // Egna, tunna droppzoner precis ovanför första och under sista raden (se CategoryContent) –
+    // utan dem föll ett släpp i den luckan tillbaka på closestCenter över ALLA droppzoner i hela
+    // arbetsytan (inklusive taggpaletten till höger), vilket gjorde släpp längst upp/ner opålitligt.
+    // Index sätts ovillkorligt, ingen center-jämförelse behövs eftersom zonen bara finns på en plats.
+    if ((overData?.type === 'edge-start' || overData?.type === 'edge-end') && overData.category && typeof overData.index === 'number') {
+      setDropIndicator({ category: overData.category, index: overData.index })
+      return
+    }
     if (overData?.type === 'material' && overData.category && typeof overData.index === 'number') {
       const draggedRect = active.rect.current.translated
       const overRect = over.rect
@@ -444,6 +452,16 @@ function CategoryContent({
   // inom någon av de enskilda radernas egna, mindre droppzoner) och alltid "vunnit" det med index 0,
   // oavsett var i listan luckan faktiskt låg.
   const { setNodeRef } = useDroppable({ id: `category-${category}`, data: { type: 'category', category }, disabled: readOnly })
+  const { setNodeRef: setEdgeStartRef } = useDroppable({
+    id: `edge-start-${category}`,
+    data: { type: 'edge-start', category, index: 0 },
+    disabled: readOnly,
+  })
+  const { setNodeRef: setEdgeEndRef } = useDroppable({
+    id: `edge-end-${category}`,
+    data: { type: 'edge-end', category, index: entry.materials.length },
+    disabled: readOnly,
+  })
 
   return (
     <div className="category-column">
@@ -459,6 +477,7 @@ function CategoryContent({
             )}
           </p>
         )}
+        {!readOnly && entry.materials.length > 0 && <div ref={setEdgeStartRef} className="material-edge-zone" aria-hidden="true" />}
         <SortableContext items={entry.materials.map((ref) => `entry-${ref.id}`)} strategy={verticalListSortingStrategy}>
           {entry.materials.map((ref, index) => (
             <Fragment key={ref.id}>
@@ -478,6 +497,7 @@ function CategoryContent({
           ))}
         </SortableContext>
         {dropIndicatorIndex === entry.materials.length && entry.materials.length > 0 && <div className="insert-indicator" />}
+        {!readOnly && entry.materials.length > 0 && <div ref={setEdgeEndRef} className="material-edge-zone" aria-hidden="true" />}
       </div>
       {readOnly ? (
         <FieldValue label="Övrigt" value={entry.ovrigt} />
@@ -583,8 +603,9 @@ function MaterialEntry({
             <GripIcon width={16} height={16} />
           </button>
         )}
-        <span className="tag-chip" style={tagChipStyle(tag?.colorIndex)}>
-          {tagLabel(tag)}
+        <span className="palette-tag-chip" style={tagChipStyle(tag?.colorIndex)}>
+          <span className="palette-tag-code">{tagLabel(tag)}</span>
+          {tag?.description && <span className="palette-tag-desc">{tag.description}</span>}
         </span>
         {!readOnly && (
           <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>

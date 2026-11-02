@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Helskärmsläge via Fullscreen API – en genväg man lagt till på hemskärmen (manifestets
@@ -8,11 +8,32 @@ import { useEffect, useState } from 'react'
  */
 export function useFullscreen() {
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
+  // Minns om man VAR i helskärm precis innan sidan doldes – t.ex. att öppna kameran för att ta
+  // ett foto (via <input capture>) tvingar webbläsaren ur helskärm automatiskt, och den återgår
+  // inte av sig själv när man kommer tillbaka. Återställer då helskärmen åt användaren istället
+  // för att lämna den i vanligt läge utan att de bett om det.
+  const wasFullscreenRef = useRef(false)
 
   useEffect(() => {
     const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
     document.addEventListener('fullscreenchange', handleChange)
     return () => document.removeEventListener('fullscreenchange', handleChange)
+  }, [])
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        wasFullscreenRef.current = Boolean(document.fullscreenElement)
+      } else if (document.visibilityState === 'visible' && wasFullscreenRef.current && !document.fullscreenElement) {
+        void document.documentElement.requestFullscreen().catch(() => {
+          // En del webbläsare kräver en direkt användargest för requestFullscreen() och
+          // tillåter inte detta från en visibilitychange-händelse – då får adressfältet
+          // synas kvar tills man trycker helskärmsknappen igen, samma som innan den här fixen.
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
 
   const toggle = () => {

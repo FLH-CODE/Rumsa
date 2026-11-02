@@ -133,13 +133,13 @@ export function TagsOverviewPanel({
     return (
       <div className="modal-backdrop tags-overview-backdrop" onClick={onClose}>
         <div className="modal-sheet tags-overview-sheet" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn-ghost btn tap-target sheet-close-float" onClick={onClose} aria-label="Stäng">
+            <CloseIcon width={18} height={18} />
+          </button>
           <div className="tags-overview-sheet-header">
             <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Material och inventarier</h2>
-            <button className="btn-ghost btn tap-target" onClick={onClose} aria-label="Stäng">
-              <CloseIcon width={18} height={18} />
-            </button>
           </div>
-          {categorySections}
+          <div className="tags-overview-sheet-body">{categorySections}</div>
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={onClose}>
               Stäng

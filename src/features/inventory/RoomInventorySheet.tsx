@@ -47,6 +47,10 @@ export function RoomInventorySheet({
   // man trycker Avbryt istället för Klar, så ett avbrutet rumskort inte ändå lämnar kvar nya
   // poster i projektets taggbibliotek.
   const createdTagIdsRef = useRef<Set<string>>(new Set())
+  // Håller reda på om NÅGOT ändrats sedan kortet öppnades, så Avbryt/Escape/bakgrundsklick kan
+  // varna istället för att stänga rakt av – satt av alla ställen som faktiskt ändrar rummets data
+  // (se nedan), aldrig av den egna inladdningen från databasen.
+  const hasChangesRef = useRef(false)
 
   useAutosave(
     { roomNumber, roomName },
@@ -78,6 +82,13 @@ export function RoomInventorySheet({
   }
 
   const handleCancel = async () => {
+    if (hasChangesRef.current) {
+      const confirmed = await confirmDialog('Du har gjort ändringar i rummet. Avsluta utan att fortsätta redigera?', {
+        confirmLabel: 'Avsluta',
+        cancelLabel: 'Fortsätt redigera',
+      })
+      if (!confirmed) return
+    }
     for (const tagId of createdTagIdsRef.current) {
       await deleteMaterialTagCascade(projectId, tagId)
     }
@@ -157,13 +168,17 @@ export function RoomInventorySheet({
   )
 
   const setField = <K extends keyof Loaded>(key: K, value: Loaded[K]) => {
+    hasChangesRef.current = true
     setLoaded((prev) => (prev ? { ...prev, [key]: value } : prev))
   }
 
-  const setCategoryEntry = (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) =>
+  const setCategoryEntry = (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) => {
+    hasChangesRef.current = true
     setLoaded((prev) => (prev ? { ...prev, categories: { ...prev.categories, [category]: updater(prev.categories[category]) } } : prev))
+  }
 
   const handleLinkType = async (type: RoomType) => {
+    hasChangesRef.current = true
     await linkRoomToType(room, type)
     setShowTypeMenu(false)
   }
@@ -177,6 +192,7 @@ export function RoomInventorySheet({
       { danger: true, confirmLabel: 'Skriv över' },
     )
     if (!confirmed) return
+    hasChangesRef.current = true
     await applyRoomTypeDataOnce(room, type)
     // Se handleUnlinkType nedan – satt direkt istället för nollställd, av samma anledning.
     setLoaded({
@@ -199,6 +215,7 @@ export function RoomInventorySheet({
 
   const handleUnlinkType = async () => {
     if (!linkedType || !record) return
+    hasChangesRef.current = true
     await unlinkRoomFromType(room, linkedType)
     // unlinkRoomFromType skriver typrummets data direkt till rummets egen (oförändrade)
     // inventeringspost – samma post-id som innan, så effekten som annars synkar `loaded` från
@@ -222,6 +239,7 @@ export function RoomInventorySheet({
       danger: true,
     })
     if (!confirmed) return
+    hasChangesRef.current = true
     const cleared = {
       categories: emptyCategories(),
       antalPersoner: '',
@@ -257,7 +275,10 @@ export function RoomInventorySheet({
               value={roomNumber}
               placeholder="Rumsnummer"
               enterKeyHint="done"
-              onChange={(e) => setRoomNumber(e.target.value)}
+              onChange={(e) => {
+                hasChangesRef.current = true
+                setRoomNumber(e.target.value)
+              }}
               onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnummer"
             />
@@ -266,7 +287,10 @@ export function RoomInventorySheet({
               value={roomName}
               placeholder="Rumsnamn"
               enterKeyHint="done"
-              onChange={(e) => setRoomName(e.target.value)}
+              onChange={(e) => {
+                hasChangesRef.current = true
+                setRoomName(e.target.value)
+              }}
               onKeyDown={blurOnEnterEscape}
               aria-label="Rumsnamn"
             />
@@ -389,7 +413,10 @@ export function RoomInventorySheet({
                 }}
                 setFunktionField={(key, value) => setField(key, value)}
                 readOnly={Boolean(linkedType)}
-                onTagCreated={(tagId) => createdTagIdsRef.current.add(tagId)}
+                onTagCreated={(tagId) => {
+                  hasChangesRef.current = true
+                  createdTagIdsRef.current.add(tagId)
+                }}
               />
             )}
           </div>

@@ -327,6 +327,55 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Samma mönster som rumskortet (se .inventory-sheet-content) – bara den här mittensektionen
+   scrollar, så header och Stäng-knappen ligger fast kvar istället för att följa med en lång
+   taggöversikt nedåt, och sheeten (se .tags-overview-sheet nedan) kan fylla ut hela sin höjd på
+   små skärmar utan att innehållet beskärs i underkant. */
+.tags-overview-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tags-overview-sheet,
+.tag-filter-sheet {
+  overflow: hidden;
+  position: relative;
+}
+
+.tags-overview-sheet .modal-actions,
+.tag-filter-sheet .modal-actions {
+  flex-shrink: 0;
+}
+
+.tag-filter-sheet > h2 {
+  flex-shrink: 0;
+  padding-right: 36px;
+}
+
+.tags-overview-sheet-header h2 {
+  padding-right: 36px;
+}
+
+/* Fast/flygande stängknapp – samma mönster som fotolightboxen i rumskortet (se
+   .photo-lightbox-close): ligger kvar i sheetens övre hörn oavsett scroll, istället för att vara
+   en vanlig knapp i flödet som annars följer med när rubrikraden är bred (t.ex. med ett rumsnamn)
+   eller försvinner ur sikte i en lång scrollande lista. */
+.sheet-close-float {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  color: var(--color-text-muted);
+}
+
+.tag-filter-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .modal-sheet {
@@ -1297,6 +1346,17 @@ textarea:focus-visible {
   }
 }
 
+/* Osynlig men klickbar/släppbar remsa precis ovanför första och under sista raden (se
+   CategoryContent/handleDragOver) – utan den föll ett släpp i den luckan tillbaka på closestCenter
+   över HELA arbetsytan (inklusive taggpaletten), vilket gjorde släpp längst upp/ner i listan
+   opålitligt. Negativ marginal kompenserar exakt listans egna gap (14px) så den inte syns som
+   extra luft när man inte drar något.
+*/
+.material-edge-zone {
+  height: 14px;
+  margin: -7px 0;
+}
+
 .insert-indicator {
   height: 44px;
   border-radius: 8px;
@@ -1381,13 +1441,18 @@ textarea:focus-visible {
 
 .material-entry-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
-.material-entry-head .tag-chip {
+.material-entry-head .palette-tag-chip {
   flex: 1;
   min-width: 0;
+}
+
+.material-entry-head .material-entry-grip,
+.material-entry-head .material-entry-remove {
+  flex-shrink: 0;
 }
 
 /* Taggens egen färg som bakgrund på själva texten (se tagChipStyle) istället för en liten prick
@@ -1803,8 +1868,6 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 50vh;
-  overflow-y: auto;
 }
 
 .tag-filter-option {
