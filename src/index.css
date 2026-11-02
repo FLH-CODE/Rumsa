@@ -644,7 +644,7 @@ textarea:focus-visible {
 }
 
 .viewer-sidebar-tab.open {
-  transform: translateY(-50%) translateX(112px);
+  transform: translateY(-50%) translateX(168px);
 }
 
 .viewer-sidebar-tab svg {
@@ -677,7 +677,7 @@ textarea:focus-visible {
 .viewer-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 112px;
+  width: 168px;
   z-index: 5;
   overflow-y: auto;
   background: #0f1213;
@@ -730,19 +730,21 @@ textarea:focus-visible {
   background: #2a2e2f;
 }
 
-.viewer-main .react-transform-wrapper,
-.viewer-main .react-transform-component {
+.viewer-main .react-transform-wrapper {
   width: 100% !important;
   height: 100% !important;
-}
-
-.viewer-main .react-transform-wrapper {
   /* Annars tävlar webbläsarens egna pinch-zoom-sida/panorering med bibliotekets egen
      gesthantering, vilket kändes hoppigt på styrplatta/pekskärm. */
   touch-action: none;
   overscroll-behavior: contain;
 }
 
+/* VIKTIGT: ingen width/height 100% här (till skillnad från wrappern ovan) – biblioteket mäter
+   just det här elementets EGEN (oskalade) storlek för att räkna ut hur långt man kan panorera
+   (se dess default-CSS, som sätter width/height: fit-content här av samma anledning). Tvingade vi
+   den till 100% av wrappern istället för till PDF-canvasens faktiska storlek (se .pdf-page-stage,
+   inline-block) blev panoreringsgränserna fel – man kunde inte dra bilden ända fram till höger
+   kant, eftersom gränsen räknades mot fel (för liten/stor) bredd. */
 .viewer-main .react-transform-component {
   /* Ger det panorerade/zoomade innehållet ett eget kompositeringslager – annars kunde
      webbläsaren falla tillbaka på att rita om alla rumstaggars skuggor för varje musrörelse
@@ -827,7 +829,10 @@ textarea:focus-visible {
   transform: translateX(-50%);
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
+  max-width: calc(100% - 32px);
 }
 
 .viewer-toolbar .btn {

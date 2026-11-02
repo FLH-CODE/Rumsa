@@ -12,12 +12,13 @@ import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { getViewerPosition, setViewerPosition } from '../features/pdf/viewerPositionStore'
 import { renameOrAssignLevel } from '../features/pdf/levelAssignment'
+import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForIndex } from '../features/tags/colorForValue'
 import { FullscreenButton } from '../components/FullscreenButton'
-import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
+import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon, ScanRoomsIcon } from '../components/icons'
 import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
 export default function DrawingViewerPage() {
@@ -43,7 +44,11 @@ export default function DrawingViewerPage() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
   const [renamingLevel, setRenamingLevel] = useState(false)
+  const [regeneratingRooms, setRegeneratingRooms] = useState(false)
+  const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null)
   const pageSortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -201,6 +206,24 @@ export default function DrawingViewerPage() {
 
   const currentLevel = currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null
 
+  // Söker om efter rumstaggar på den HÄR sidan (samma detektering som vid uppladdning/formatbyte,
+  // se syncRoomsForPage) – t.ex. om man lagt till rum för hand i Revit sen sist. Matchar på
+  // rumsnummer och behåller befintliga rums id, så ett rum som redan är kopplat till ett typrum
+  // eller har ifylld inventeringsdata aldrig ersätts/tappar den kopplingen – bara dess namn och
+  // taggposition uppdateras om det hittas igen, och nya (tidigare osedda) nummer läggs till.
+  const handleAutoGenerateRooms = async () => {
+    if (!doc || !currentPage || !project) return
+    setRegeneratingRooms(true)
+    setRegenerateMessage(null)
+    try {
+      const page = await doc.getPage(currentPage.pageIndex + 1)
+      const count = await syncRoomsForPage(page, currentPage, project.roomNumberPattern)
+      setRegenerateMessage(`${count} rum hittades på sidan.`)
+    } finally {
+      setRegeneratingRooms(false)
+    }
+  }
+
   return (
     <div className="viewer-page">
       {/* Inga sammanhängande verktygsfält – varje kontroll är sin egen flytande knapp direkt
@@ -296,7 +319,11 @@ export default function DrawingViewerPage() {
               centerOnInit={!viewerPosition}
               // Annars zoomar varje scrollrörelse (mus-hjul eller styrplatta) i stället för att panorera,
               // vilket kändes hoppigt/förvirrande. Nu panorerar vanlig scroll, och pinch/ctrl+scroll zoomar.
-              wheel={{ wheelDisabled: true }}
+              // `step` tonas ner rejält (bibliotekets eget default, 0.015, är satt för styrplattans
+              // små och täta deltaY-värden) – en vanlig mus skickar ett enda, mycket större deltaY
+              // (ofta ~100+) per hjulklick, vilket med default-steget gav ett jättehopp i skalan per
+              // klick (särskilt synligt vid utzoomning: ritningen "flimrade bort och tillbaka").
+              wheel={{ wheelDisabled: true, step: 0.002 }}
               trackPadPanning={{ disabled: false }}
               // Uppdaterar skalan (styr rumstaggarnas motskalning) och sparar undan pan/zoom-läget
               // per sida, men bara när det faktiskt ändrats mer än flyttalsbrus – annars triggar ren
@@ -342,13 +369,33 @@ export default function DrawingViewerPage() {
                   Avbryt
                 </button>
               </>
-            ) : (
-              <button
-                className={`btn ${addRoomMode ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setAddRoomMode((on) => !on)}
-              >
-                {addRoomMode ? 'Tryck på ritningen…' : '+ Lägg till rum'}
+            ) : addRoomMode ? (
+              <button className="btn btn-primary" onClick={() => setAddRoomMode(false)}>
+                Tryck på ritningen…
               </button>
+            ) : (
+              <>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setAddRoomMode(true)
+                    setRegenerateMessage(null)
+                  }}
+                >
+                  + Lägg till rum
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void handleAutoGenerateRooms()}
+                  disabled={regeneratingRooms}
+                  title="Sök igenom ritningen efter rumstaggar igen – ersätter aldrig redan hittade rum, hittar bara nya"
+                >
+                  <ScanRoomsIcon width={18} height={18} />
+                  {regeneratingRooms ? 'Hittar rum…' : 'Autogenerera rum'}
+                </button>
+                {regenerateMessage && <span className="viewer-toolbar-hint">{regenerateMessage}</span>}
+              </>
             )}
           </div>
         </div>
