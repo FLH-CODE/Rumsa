@@ -29,16 +29,34 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
   onDelete,
 }: {
   photos: T[] | undefined
-  onAdd: (files: FileList) => unknown
+  onAdd: (files: File[]) => unknown
   onDelete: (photo: T) => unknown
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [openPhotoId, setOpenPhotoId] = useState<string | null>(null)
 
-  const handleFilesSelected = (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    void onAdd(files)
+  const handleFilesSelected = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    // Kopieras till en egen array DIREKT – input.files är en LEVANDE lista, så att nollställa
+    // inputens value (för att kunna välja om samma fil) skulle annars tömma den redan mottagna
+    // listan innan onAdd hinner läsa den, och tagningen skulle tyst inte lägga till något alls.
+    const files = Array.from(fileList)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    // Frågar bara om det redan finns bilder – annars är det första bilden och det finns inget att
+    // ersätta. "Avbryt" (eller Escape/bakgrundsklick, som också svarar nej) betyder "lägg till"
+    // (den gamla standarden), inte att hela tagningen avbryts – det är det icke-förstörande valet.
+    if (photos && photos.length > 0) {
+      const replace = await confirmDialog(
+        photos.length === 1
+          ? 'Det finns redan en bild. Ersätt den befintliga bilden, eller lägg till den nya också?'
+          : 'Det finns redan bilder. Ersätt de befintliga bilderna, eller lägg till den nya också?',
+        { confirmLabel: 'Ersätt', cancelLabel: 'Lägg till' },
+      )
+      if (replace) {
+        for (const photo of photos) await onDelete(photo)
+      }
+    }
+    void onAdd(files)
   }
 
   const handleDelete = async (photo: T) => {
@@ -58,7 +76,7 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
         capture="environment"
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => handleFilesSelected(e.target.files)}
+        onChange={(e) => void handleFilesSelected(e.target.files)}
       />
       <button type="button" className="btn btn-secondary photo-add-btn" onClick={() => fileInputRef.current?.click()}>
         <CameraIcon width={18} height={18} /> Ta bild

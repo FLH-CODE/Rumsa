@@ -74,6 +74,7 @@ export default function ProjectDetailPage() {
   )
 
   const [exporting, setExporting] = useState(false)
+  const [exportingProject, setExportingProject] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
   const status = useAutosave(
@@ -127,6 +128,21 @@ export default function ProjectDetailPage() {
       setExportError(err instanceof Error ? err.message : 'Okänt fel vid export.')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleExportProject = async () => {
+    if (!projectId) return
+    setExportingProject(true)
+    setExportError(null)
+    try {
+      // Laddas bara in när man faktiskt exporterar – jszip behövs inte i grundappen.
+      const { exportProjectBackup } = await import('../features/backup/projectBackup')
+      await exportProjectBackup(projectId)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Okänt fel vid export.')
+    } finally {
+      setExportingProject(false)
     }
   }
 
@@ -316,6 +332,18 @@ export default function ProjectDetailPage() {
           >
             <ExportIcon className="settings-list-icon" />
             <span className="settings-list-label">{exporting ? 'Exporterar…' : 'Exportera till Excel'}</span>
+            <ChevronRightIcon className="settings-list-chevron" />
+          </button>
+          <button
+            className="settings-list-item"
+            onClick={() => void handleExportProject()}
+            disabled={exportingProject}
+            aria-label={exportingProject ? 'Exporterar projekt…' : 'Exportera projekt (för att öppna på en annan enhet)'}
+          >
+            <ExportIcon className="settings-list-icon" />
+            <span className="settings-list-label">
+              {exportingProject ? 'Exporterar projekt…' : 'Exportera projekt'}
+            </span>
             <ChevronRightIcon className="settings-list-chevron" />
           </button>
           <button

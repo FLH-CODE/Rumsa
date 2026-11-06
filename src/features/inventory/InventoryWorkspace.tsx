@@ -528,7 +528,7 @@ function RoomPhotoGallery({ roomId }: { roomId: string }) {
     <PhotoGallery
       photos={photos}
       onAdd={(files) =>
-        db.roomPhotos.bulkAdd(Array.from(files).map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })))
+        db.roomPhotos.bulkAdd(files.map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })))
       }
       onDelete={(photo) => db.roomPhotos.delete(photo.id)}
     />

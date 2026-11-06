@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, createId, type Project } from '../db'
 import { deleteProjectCascade } from '../features/data/cascadeDelete'
+import { ProjectImportCancelledError } from '../features/backup/ProjectImportCancelledError'
 import { ROOM_NUMBER_PRESETS } from '../features/project/roomNumberPresets'
 import { confirmDialog } from '../components/ConfirmDialog'
 import { FullscreenButton } from '../components/FullscreenButton'
@@ -12,6 +13,8 @@ export default function ProjectListPage() {
   const navigate = useNavigate()
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray(), [])
   const [showCreate, setShowCreate] = useState(false)
+  const [importState, setImportState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null })
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const handleDelete = async (project: Project) => {
     const confirmed = await confirmDialog(
@@ -20,6 +23,26 @@ export default function ProjectListPage() {
     )
     if (!confirmed) return
     await deleteProjectCascade(project.id)
+  }
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return
+    setImportState({ busy: true, error: null })
+    try {
+      // Laddas bara in när man faktiskt importerar – jszip behövs inte i grundappen.
+      const { importProjectBackup } = await import('../features/backup/projectBackup')
+      const projectId = await importProjectBackup(file)
+      setImportState({ busy: false, error: null })
+      navigate(`/project/${projectId}`)
+    } catch (err) {
+      if (err instanceof ProjectImportCancelledError) {
+        setImportState({ busy: false, error: null })
+        return
+      }
+      setImportState({ busy: false, error: err instanceof Error ? err.message : 'Okänt fel vid import.' })
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
   }
 
   return (
@@ -58,6 +81,30 @@ export default function ProjectListPage() {
             <span>Nytt projekt</span>
           </button>
         </div>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          style={{ display: 'none' }}
+          onChange={(e) => void handleImportFile(e.target.files?.[0] ?? null)}
+        />
+        <button
+          className="btn btn-secondary"
+          style={{ marginTop: 14 }}
+          disabled={importState.busy}
+          onClick={() => importInputRef.current?.click()}
+        >
+          {importState.busy ? 'Importerar…' : 'Importera projekt (.zip)'}
+        </button>
+        <p className="field-hint">
+          Öppnar en projektexport skapad med "Exportera projekt" – t.ex. för att fortsätta arbeta med ett projekt från
+          en annan enhet.
+        </p>
+        {importState.error && (
+          <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
+            {importState.error}
+          </p>
+        )}
       </main>
       {showCreate && <CreateProjectSheet onClose={() => setShowCreate(false)} />}
     </>

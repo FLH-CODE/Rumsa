@@ -210,7 +210,7 @@ function TagPhotoGallery({ tagId }: { tagId: string }) {
     <PhotoGallery
       photos={photos}
       onAdd={(files) =>
-        db.tagPhotos.bulkAdd(Array.from(files).map((file) => ({ id: createId(), tagId, blob: file, createdAt: Date.now() })))
+        db.tagPhotos.bulkAdd(files.map((file) => ({ id: createId(), tagId, blob: file, createdAt: Date.now() })))
       }
       onDelete={(photo) => db.tagPhotos.delete(photo.id)}
     />
