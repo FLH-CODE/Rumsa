@@ -14,7 +14,7 @@ export function useFullscreen() {
   // för att lämna den i vanligt läge utan att de bett om det.
   const wasFullscreenRef = useRef(false)
   // Sätts när man kommer tillbaka till appen men helskärmen inte återställts av sig själv – väntar
-  // på nästa riktiga användargest (se pointerdown-lyssnaren nedan) innan den faktiskt återställs.
+  // på nästa riktiga användargest (se click-lyssnaren nedan) innan den faktiskt återställs.
   const pendingRestoreRef = useRef(false)
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function useFullscreen() {
     // Själva återställningen görs INTE här direkt – requestFullscreen() kräver en färsk, direkt
     // användargest (s.k. transient activation), och en visibilitychange-händelse räknas inte som
     // en sådan i de flesta webbläsare, så ett anrop härifrån misslyckas tyst. Sätter istället en
-    // flagga och återställer på nästa riktiga pekar-/klickgest nedan, vilket ÄR en giltig gest.
+    // flagga och återställer på nästa riktiga klickgest nedan, vilket ÄR en giltig gest.
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         wasFullscreenRef.current = Boolean(document.fullscreenElement)
@@ -40,11 +40,18 @@ export function useFullscreen() {
   }, [])
 
   useEffect(() => {
-    // Fångar nästa riktiga användargest (tryck/klick) efter att man kommit tillbaka till appen –
-    // t.ex. den naturliga första pekningen man gör på skärmen igen efter att ha tagit ett foto –
-    // och använder DEN gesten för att återställa helskärmen, istället för att försöka (och
-    // misslyckas) direkt från visibilitychange-händelsen ovan.
-    const handlePointerDown = () => {
+    // Fångar nästa riktiga tryckning efter att man kommit tillbaka till appen – t.ex. den
+    // naturliga första pekningen man gör på skärmen igen efter att ha tagit ett foto – och
+    // använder DEN för att återställa helskärmen, istället för att försöka (och misslyckas) direkt
+    // från visibilitychange-händelsen ovan.
+    //
+    // Lyssnar på 'click', INTE 'pointerdown'/'touchstart' – ett scroll- eller dra-försök BÖRJAR
+    // också med en pointerdown, så att återställa helskärm (vilket ändrar viewport-storleken när
+    // adressfältet döljs) exakt där avbröt webbläsarens pågående scroll-gest mitt i, vilket i
+    // praktiken gjorde det omöjligt att scrolla alls efter att ha kommit tillbaka från kameran.
+    // 'click' triggas bara efter en RIKTIG, avslutad tryckning (inte en drag/scroll), så det stör
+    // aldrig ett scroll-försök på samma sätt.
+    const handleClick = () => {
       if (!pendingRestoreRef.current) return
       pendingRestoreRef.current = false
       if (!document.fullscreenElement) {
@@ -54,8 +61,8 @@ export function useFullscreen() {
         })
       }
     }
-    document.addEventListener('pointerdown', handlePointerDown, { capture: true })
-    return () => document.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+    document.addEventListener('click', handleClick, { capture: true })
+    return () => document.removeEventListener('click', handleClick, { capture: true })
   }, [])
 
   const toggle = () => {

@@ -34,6 +34,12 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [openPhotoId, setOpenPhotoId] = useState<string | null>(null)
+  // Frågan (se nedan) ställs bara EN gång per gång galleriet öppnas – kameran kan bara ta en bild
+  // åt gången, så att ta flera bilder i rad (ett helt vanligt sätt att dokumentera ett rum) innebär
+  // flera separata tagningar efter varandra. Att fråga om ersätt/lägg-till vid VARJE enskild
+  // tagning gjorde det i praktiken omöjligt att bygga upp mer än en bild utan att ständigt avbrytas
+  // av samma fråga – ett svar (vilketdera) gäller därför resten av den här öppningen.
+  const hasAskedReplaceRef = useRef(false)
 
   const handleFilesSelected = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
@@ -42,10 +48,12 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
     // listan innan onAdd hinner läsa den, och tagningen skulle tyst inte lägga till något alls.
     const files = Array.from(fileList)
     if (fileInputRef.current) fileInputRef.current.value = ''
-    // Frågar bara om det redan finns bilder – annars är det första bilden och det finns inget att
-    // ersätta. "Avbryt" (eller Escape/bakgrundsklick, som också svarar nej) betyder "lägg till"
-    // (den gamla standarden), inte att hela tagningen avbryts – det är det icke-förstörande valet.
-    if (photos && photos.length > 0) {
+    // Frågar bara om det redan finns bilder OCH frågan inte redan ställts den här gången – annars
+    // är det första bilden och det finns inget att ersätta. "Avbryt" (eller Escape/bakgrundsklick,
+    // som också svarar nej) betyder "lägg till" (den gamla standarden), inte att hela tagningen
+    // avbryts – det är det icke-förstörande valet.
+    if (!hasAskedReplaceRef.current && photos && photos.length > 0) {
+      hasAskedReplaceRef.current = true
       const replace = await confirmDialog(
         photos.length === 1
           ? 'Det finns redan en bild. Ersätt den befintliga bilden, eller lägg till den nya också?'
