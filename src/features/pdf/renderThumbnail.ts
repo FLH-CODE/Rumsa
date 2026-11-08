@@ -8,7 +8,12 @@ import type { PDFPageProxy } from 'pdfjs-dist'
  * lagrade miniatyr måste då räcka till en skarpare skärm än den en gång renderades för. */
 export async function renderThumbnail(page: PDFPageProxy, targetWidth = 220): Promise<string> {
   const baseViewport = page.getViewport({ scale: 1 })
-  const dpr = window.devicePixelRatio || 1
+  // Begränsad till max 2x – en miniatyr behöver inte full (ibland 3x+) pixeltäthet för att se
+  // skarp ut i en liten sidlista, och en obegränsad multiplikator blev en betydande extra
+  // minnesbelastning (kvadratiskt mot täthetstalet) på mobiler med många sidor i samma projekt.
+  // Den minnespressen visade sig kunna räcka för att kameran inte längre gick att öppna alls
+  // ("för lite minne") när man sedan försökte ta ett foto i samma session.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const scale = (targetWidth * dpr) / baseViewport.width
   const viewport = page.getViewport({ scale })
 

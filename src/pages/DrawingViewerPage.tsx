@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, createId, type DrawingPage, type Level, type Room } from '../db'
@@ -46,7 +46,16 @@ export default function DrawingViewerPage() {
   const [renamingLevel, setRenamingLevel] = useState(false)
   const [regeneratingRooms, setRegeneratingRooms] = useState(false)
   const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null)
-  const pageSortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  // Separata sensorer för mus och touch (inte en gemensam PointerSensor) – på touch ska ett
+  // vanligt swipe för att SCROLLA sidlistan vara standardbeteendet, inte råka starta en
+  // dra-om-ordning. MouseSensor aktiverar fortfarande direkt efter en kort rörelse (naturligt för
+  // en mus), men TouchSensor kräver att man håller inne fingret en stund (utan att röra sig mer än
+  // `tolerance`) innan draget räknas som avsiktligt – rör man sig mer eller snabbare än så tolkas
+  // det som ett scroll-försök istället, och själva webbläsarens scroll får ta över som vanligt.
+  const pageSortSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+  )
 
   const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
 
