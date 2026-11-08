@@ -118,8 +118,10 @@ function PhotoThumb({ blob, onOpen, onDelete }: { blob: Blob; onOpen: () => void
 }
 
 /** Visar fotot i storformat ovanpå allt annat – stängs genom att trycka utanför bilden eller på
- * X-knappen. */
-function PhotoLightbox({ blob, onClose }: { blob: Blob; onClose: () => void }) {
+ * X-knappen. Exporterad så andra skrivskyddade bildvisningar (t.ex. rumskortets översiktsläge,
+ * se RoomSummary i InventoryWorkspace.tsx) kan återanvända samma förstorings-UI utan ett helt
+ * eget galleri (med Ta bild/radera-knappar) runt omkring. */
+export function PhotoLightbox({ blob, onClose }: { blob: Blob; onClose: () => void }) {
   const url = useObjectUrl(blob)
   return (
     <div className="photo-lightbox-backdrop" onClick={onClose}>

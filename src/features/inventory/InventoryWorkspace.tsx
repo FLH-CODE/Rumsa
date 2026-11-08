@@ -27,7 +27,8 @@ import { TagThumbnail } from '../tags/TagThumbnail'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
 import { GripIcon, SummaryIcon } from '../../components/icons'
-import { PhotoGallery } from '../../components/PhotoGallery'
+import { PhotoGallery, PhotoLightbox } from '../../components/PhotoGallery'
+import { useObjectUrl } from '../../hooks/useObjectUrl'
 import { RAIL_TABS, CATEGORY_LABEL, CATEGORY_ICON, isRoomCategory, type RailTab, type RoomTab } from './categories'
 import { getLastActiveTab, setLastActiveTab } from './activeTabStore'
 
@@ -81,6 +82,8 @@ export function InventoryWorkspace({
   onTagCreated,
   pendingDeletedPhotoIds,
   onMarkPhotoDeletePending,
+  pendingNoteEdits,
+  onNoteEdit,
 }: {
   projectId: string
   /** Rummets id – styr om fliken "Bilder" visas alls. Finns bara för ett riktigt rum (inte när
@@ -99,6 +102,13 @@ export function InventoryWorkspace({
    * RoomInventorySheets handleDone/handleCancel). */
   pendingDeletedPhotoIds?: Set<string>
   onMarkPhotoDeletePending?: (photoId: string) => void
+  /** Oh-sparade anteckningsändringar (material-id → utkasttext) – visas direkt men skrivs INTE in
+   * i `categories` (som annars autosparas löpande oavsett Klar/Avbryt, se RoomInventorySheet)
+   * förrän rumskortet faktiskt sparas. Saknas helt i typrumsredigeraren (RoomTypesPage), som redan
+   * håller ALL sin data som rent lokalt state tills Klar – där faller anteckningar tillbaka på
+   * samma väg som allt annat (setCategoryEntry, se updateMaterialNote). */
+  pendingNoteEdits?: Map<string, string>
+  onNoteEdit?: (refId: string, note: string) => void
 }) {
   // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
   // när arbetsytan faktiskt hör till ett riktigt rum.
@@ -147,11 +157,16 @@ export function InventoryWorkspace({
       return { ...entry, materials }
     })
 
-  const updateMaterialNote = (category: RoomCategory, refId: string, note: string) =>
+  const updateMaterialNote = (category: RoomCategory, refId: string, note: string) => {
+    if (onNoteEdit) {
+      onNoteEdit(refId, note)
+      return
+    }
     setCategoryEntry(category, (entry) => ({
       ...entry,
       materials: entry.materials.map((m) => (m.id === refId ? { ...m, note } : m)),
     }))
+  }
 
   const updateMaterialAntal = (category: RoomCategory, refId: string, antal: number) =>
     setCategoryEntry(category, (entry) => ({
@@ -268,7 +283,13 @@ export function InventoryWorkspace({
         </div>
 
         {showSummary ? (
-          <RoomSummary projectId={projectId} categories={categories} funktion={funktion} />
+          <RoomSummary
+            projectId={projectId}
+            roomId={roomId}
+            categories={categories}
+            funktion={funktion}
+            pendingNoteEdits={pendingNoteEdits}
+          />
         ) : (
         <div className="room-workspace-body">
           <div className="room-workspace-main">
@@ -349,6 +370,7 @@ export function InventoryWorkspace({
                 projectId={projectId}
                 readOnly={readOnly}
                 dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
+                pendingNoteEdits={pendingNoteEdits}
                 onRemoveMaterial={(ref, tag) => void removeMaterial(activeTab, ref, tag)}
                 onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
                 onAntalChange={(refId, antal) => updateMaterialAntal(activeTab, refId, antal)}
@@ -447,6 +469,7 @@ function CategoryContent({
   projectId,
   readOnly,
   dropIndicatorIndex,
+  pendingNoteEdits,
   onRemoveMaterial,
   onNoteChange,
   onAntalChange,
@@ -457,6 +480,7 @@ function CategoryContent({
   projectId: string
   readOnly: boolean
   dropIndicatorIndex: number | null
+  pendingNoteEdits?: Map<string, string>
   onRemoveMaterial: (ref: MaterialReference, tag: MaterialTag | undefined) => void
   onNoteChange: (refId: string, note: string) => void
   onAntalChange: (refId: string, antal: number) => void
@@ -506,7 +530,7 @@ function CategoryContent({
               <MaterialEntry
                 index={index}
                 category={category}
-                reference={ref}
+                reference={pendingNoteEdits?.has(ref.id) ? { ...ref, note: pendingNoteEdits.get(ref.id)! } : ref}
                 tag={tagById.get(ref.tagId)}
                 projectId={projectId}
                 readOnly={readOnly}
@@ -707,9 +731,15 @@ function TagPalette({
     () => db.materialTags.where('projectId').equals(projectId).filter((t) => t.category === category).sortBy('code'),
     [projectId, category],
   )
+  // Täcker HELA paletten som en egen droppzon – utan den gav ett släpp här (ingen egen zon fanns
+  // att träffa) en TOM träff för pointerWithin (se collisionDetectionStrategy), vilket föll
+  // tillbaka på closestCenter över ALLA zoner i arbetsytan och kunde "träffa" vänsterspaltens
+  // materiallista trots att pekaren aldrig var i närheten av den. overData.type === 'palette'
+  // matchar ingen gren i handleDragOver → dropIndicator blir null → inget händer vid släpp.
+  const { setNodeRef } = useDroppable({ id: `palette-self-${category}`, data: { type: 'palette' } })
 
   return (
-    <div className="tag-palette">
+    <div className="tag-palette" ref={setNodeRef}>
       <h3 className="active-category-label tag-palette-heading">Taggar</h3>
       <div className="tag-palette-list">
         {tags?.map((tag) => <PaletteTag key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />)}
@@ -758,12 +788,17 @@ function PaletteTag({ tag, onEdit }: { tag: MaterialTag; onEdit: () => void }) {
  * hänger ihop visuellt i den vanliga vyn också. */
 function RoomSummary({
   projectId,
+  roomId,
   categories,
   funktion,
+  pendingNoteEdits,
 }: {
   projectId: string
+  /** Saknas för ett typrum (se InventoryWorkspace) – typrum har inga egna rumsfoton. */
+  roomId?: string
   categories: Record<RoomCategory, CategoryEntry>
   funktion: FunktionFields
+  pendingNoteEdits?: Map<string, string>
 }) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).toArray(), [projectId])
   const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
@@ -772,20 +807,22 @@ function RoomSummary({
 
   return (
     <div className="room-summary">
+      <h2 className="active-category-label">Summering</h2>
+      {roomId && <SummaryRoomPhotos roomId={roomId} />}
       <section className="summary-section">
         <h3 className="section-heading-text">Ytskikt</h3>
         {(['golv', 'tak', 'vagg'] as const).map((category) => (
           <div key={category} className="summary-category">
             <h4 className="summary-subheading">{CATEGORY_LABEL[category]}</h4>
-            <SummaryCategoryBody entry={categories[category]} tagById={tagById} />
+            <SummaryCategoryBody entry={categories[category]} tagById={tagById} pendingNoteEdits={pendingNoteEdits} />
           </div>
         ))}
       </section>
       <SummarySection heading="Utrustning">
-        <SummaryCategoryBody entry={categories.utrustning} tagById={tagById} showAntal />
+        <SummaryCategoryBody entry={categories.utrustning} tagById={tagById} pendingNoteEdits={pendingNoteEdits} showAntal />
       </SummarySection>
       <SummarySection heading="Övrigt">
-        <SummaryCategoryBody entry={categories.ovrigt} tagById={tagById} />
+        <SummaryCategoryBody entry={categories.ovrigt} tagById={tagById} pendingNoteEdits={pendingNoteEdits} />
       </SummarySection>
       <SummarySection heading="Funktion">
         {funktionEmpty ? (
@@ -803,6 +840,38 @@ function RoomSummary({
   )
 }
 
+/** Rummets egna foton (se RoomPhotoGallery) – skrivskyddad, ingen Ta bild/radera-knapp, bara en
+ * snabb överblick tillsammans med resten av summeringen. */
+function SummaryRoomPhotos({ roomId }: { roomId: string }) {
+  const photos = useLiveQuery(() => db.roomPhotos.where('roomId').equals(roomId).sortBy('createdAt'), [roomId])
+  return (
+    <SummarySection heading="Bilder">
+      {photos === undefined ? null : photos.length === 0 ? (
+        <p className="field-hint">Inga bilder.</p>
+      ) : (
+        <div className="photo-grid">
+          {photos.map((photo) => (
+            <SummaryPhotoThumb key={photo.id} blob={photo.blob} />
+          ))}
+        </div>
+      )}
+    </SummarySection>
+  )
+}
+
+function SummaryPhotoThumb({ blob }: { blob: Blob }) {
+  const url = useObjectUrl(blob)
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="photo-thumb">
+      <button type="button" className="photo-thumb-open" onClick={() => setOpen(true)} aria-label="Visa bilden i storformat">
+        {url && <img src={url} alt="" />}
+      </button>
+      {open && <PhotoLightbox blob={blob} onClose={() => setOpen(false)} />}
+    </div>
+  )
+}
+
 function SummarySection({ heading, children }: { heading: string; children: ReactNode }) {
   return (
     <section className="summary-section">
@@ -815,10 +884,12 @@ function SummarySection({ heading, children }: { heading: string; children: Reac
 function SummaryCategoryBody({
   entry,
   tagById,
+  pendingNoteEdits,
   showAntal,
 }: {
   entry: CategoryEntry
   tagById: Map<string, MaterialTag>
+  pendingNoteEdits?: Map<string, string>
   showAntal?: boolean
 }) {
   const hasOvrigt = entry.ovrigt.trim().length > 0
@@ -829,13 +900,15 @@ function SummaryCategoryBody({
     <div className="inventory-rows">
       {entry.materials.map((ref) => {
         const tag = tagById.get(ref.tagId)
+        const note = pendingNoteEdits?.get(ref.id) ?? ref.note
         return (
           <div key={ref.id} className="summary-material">
             <span className="tag-chip" style={tagChipStyle(tag?.colorIndex)}>
               {tagLabel(tag)}
             </span>
+            {tag && <TagThumbnail tagId={tag.id} />}
             {showAntal && (ref.antal ?? 1) > 1 && <span className="field-hint">Antal: {ref.antal}</span>}
-            {ref.note.trim() && <span className="field-static-value material-entry-note">{ref.note}</span>}
+            {note.trim() && <span className="field-static-value material-entry-note">{note}</span>}
           </div>
         )
       })}

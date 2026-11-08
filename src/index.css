@@ -24,6 +24,40 @@
   box-sizing: border-box;
 }
 
+/* Egen, smal scrollbar överallt istället för webbläsarens/OS-temats egen – den senare kunde
+   (beroende på webbläsare/plattform) rendera med ett eget, inkonsekvent avstånd till den högra
+   kanten på en scrollbar ruta, vilket såg ut som att den "krockade" med innehållet i rutan (t.ex.
+   taggpaletten, se .tag-palette-list) istället för att ligga snyggt i marginalen. En egen, tunn
+   scrollbar flush mot kanten ger samma, förutsägbara resultat överallt. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
+/* Inga pil-knappar i ändarna – hör till webbläsarens klassiska scrollbarsstil, inte den tunna,
+   flytande som resten av reglerna ovan efterliknar. */
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
 html,
 body {
   margin: 0;
@@ -1242,6 +1276,16 @@ textarea:focus-visible {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* .tag-thumbnail är normalt width:100% av sin egen smala chip-kolumn (se .palette-tag-chip) –
+   som direkt flex-barn i den här bredare, radbrytande raden skulle den annars sträcka ut sig till
+   nästan hela radens bredd. En liten, fast storlek passar bättre bredvid tag-chip-texten här. */
+.summary-material .tag-thumbnail {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  margin-top: 0;
 }
 
 .summary-ovrigt {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory, type RoomType } from '../../db'
+import { db, ROOM_CATEGORIES, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory, type RoomType } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord, emptyCategories } from './defaultTemplate'
 import { InventoryWorkspace } from './InventoryWorkspace'
@@ -24,6 +24,25 @@ type Loaded = {
   funktionsbeskrivning: string
   dagsljus: string
   storlek: string
+}
+
+/** Lägger de hopsamlade anteckningsutkasten (se pendingNoteEdits) över categories en enda gång,
+ * precis innan de faktiskt skrivs till databasen i handleDone – materialets id är unikt över hela
+ * rummet (createId(), se InventoryWorkspace), så kategorin behöver inte vara känd här. */
+function applyPendingNotes(
+  categories: InventoryRecord['categories'],
+  pendingNoteEdits: Map<string, string>,
+): InventoryRecord['categories'] {
+  const result = { ...categories }
+  for (const category of ROOM_CATEGORIES) {
+    const entry = result[category]
+    if (!entry.materials.some((m) => pendingNoteEdits.has(m.id))) continue
+    result[category] = {
+      ...entry,
+      materials: entry.materials.map((m) => (pendingNoteEdits.has(m.id) ? { ...m, note: pendingNoteEdits.get(m.id)! } : m)),
+    }
+  }
+  return result
 }
 
 export function RoomInventorySheet({
@@ -61,6 +80,17 @@ export function RoomInventorySheet({
   const markPhotoDeletePending = (photoId: string) => {
     hasChangesRef.current = true
     setPendingDeletedPhotoIds((prev) => new Set(prev).add(photoId))
+  }
+
+  // Anteckningar (material-id → utkasttext) hålls HÄR, utanför `loaded`/autosparandet nedan –
+  // till skillnad från rummets övriga fält (som autosparas löpande oavsett Klar/Avbryt, se
+  // kommentaren vid pendingDeletedPhotoIds ovan för samma princip tillämpad på foton) ska en
+  // anteckning bara faktiskt sparas om man trycker Klar (se handleDone). Trycker man Avbryt
+  // kastas den här Map:en bara bort precis som pendingDeletedPhotoIds annars skulle göra.
+  const [pendingNoteEdits, setPendingNoteEdits] = useState<Map<string, string>>(new Map())
+  const setNoteEdit = (refId: string, note: string) => {
+    hasChangesRef.current = true
+    setPendingNoteEdits((prev) => new Map(prev).set(refId, note))
   }
 
   useAutosave(
@@ -111,6 +141,16 @@ export function RoomInventorySheet({
     createdTagIdsRef.current.clear()
     for (const photoId of pendingDeletedPhotoIds) {
       await db.roomPhotos.delete(photoId)
+    }
+    // Skriver anteckningsutkasten direkt till databasen här (inte via setCategoryEntry/loaded,
+    // vars autospar-effekt är debounce:ad 500ms och annars inte skulle hinna köras innan
+    // closeSheet/onClose nedan hinner montera bort kortet) – bara om rummet faktiskt har en egen,
+    // redigerbar post (inte skrivskyddat via ett kopplat typrum).
+    if (record && loaded && !liveRoom.roomTypeId && pendingNoteEdits.size > 0) {
+      await db.inventoryRecords.update(record.id, {
+        categories: applyPendingNotes(loaded.categories, pendingNoteEdits),
+        updatedAt: Date.now(),
+      })
     }
     await closeSheet()
   }
@@ -433,6 +473,8 @@ export function RoomInventorySheet({
                 }}
                 pendingDeletedPhotoIds={pendingDeletedPhotoIds}
                 onMarkPhotoDeletePending={markPhotoDeletePending}
+                pendingNoteEdits={pendingNoteEdits}
+                onNoteEdit={setNoteEdit}
               />
             )}
           </div>
