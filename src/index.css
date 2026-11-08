@@ -78,7 +78,13 @@ button {
   border: none;
   background: none;
   cursor: pointer;
-  touch-action: manipulation;
+  /* INGEN touch-action här längre (hade "manipulation") - samma misstanke/motivering som för
+     html/body (se där): aldrig testad i sitt frånvarande läge förrän nu. Stora knappar (t.ex.
+     "Öppna ritningsvisare"-kortet, rumsraderna) täcker en stor del av ytan på sidor som ska
+     scrollas, och "manipulation" tillåter uttryckligen pinch-zoom lokalt på just den knappen -
+     trots att viewport-metan (user-scalable=no) ändå blockerar själva zoomen, kan den motsägelsen
+     få Chrome att bli osäker på om ett enda finger ska tolkas som ett scroll- eller
+     zoom-försök, och vänta på en andra pekpunkt istället för att scrolla direkt. */
 }
 
 a {
