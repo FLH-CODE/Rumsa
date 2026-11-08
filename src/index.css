@@ -28,7 +28,13 @@ html,
 body {
   margin: 0;
   padding: 0;
-  overscroll-behavior-y: none;
+  /* "none" (testat tidigare) har en känd bugg på vissa Android Chrome-versioner där det, i
+     kombination med att sidan ofta redan STÅR högst upp (scrollTop 0) när man börjar dra, kan
+     svälja hela scroll-FÖRSÖKET – inte bara den oönskade studs-/pull-to-refresh-effekten det är
+     till för att stänga av. "contain" är Googles egen rekommendation för att stänga av
+     pull-to-refresh på Android PWA:er utan den bieffekten – stoppar fortfarande att scrollen
+     "läcker" vidare till webbläsarens egen pull-to-refresh, bara mindre aggressivt. */
+  overscroll-behavior-y: contain;
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
@@ -765,6 +771,12 @@ textarea:focus-visible {
      toleransen – den avbrytningen hinner dock aldrig ske om touch-action redan blockerat själva
      scroll-gesten på compositor-nivå innan JS ens får se den. */
   touch-action: pan-y;
+  /* iOS Safari visar annars sin egen inbyggda meny (dela/kopiera/spara bilden) på ett långt tryck
+     på en <img> – helt oberoende av dnd-kits egna draghantering, eftersom det är en
+     OS-/WebKit-nivå-gest som inte går att stoppa med JS (preventDefault på contextmenu, som
+     dnd-kit redan gör, räcker inte). Den menyn "vann" alltid racet mot det egna, avsiktligt
+     fördröjda draget, så ett långt tryck startade aldrig en omdragning alls på iPhone. */
+  -webkit-touch-callout: none;
 }
 
 .viewer-thumb.dragging {
@@ -776,6 +788,11 @@ textarea:focus-visible {
   border-radius: 4px;
   border: 2px solid transparent;
   display: block;
+  /* Samma callout-avstängning som .viewer-thumb ovan, satt direkt på bilden också – iOS triggar
+     sin inbyggda bild-meny specifikt på <img>-elementet den långa trycket råkar landa på. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .viewer-thumb.active img {

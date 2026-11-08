@@ -73,7 +73,11 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
         type="file"
         accept="image/*"
         capture="environment"
-        multiple
+        // INTE multiple – kameran returnerar ändå bara en bild per tagning, och "multiple"
+        // tillsammans med "capture" är en dåligt specificerad, historiskt inkonsekvent
+        // kombination på mobilen (vissa versioner visar en väljare mellan Kamera/Filer istället
+        // för att gå rakt till kameran). Flera bilder i rad löses redan av att man trycker
+        // "Ta bild" på nytt för varje tagning (se hasAskedReplaceRef ovan).
         style={{ display: 'none' }}
         onChange={(e) => void handleFilesSelected(e.target.files)}
       />
