@@ -115,6 +115,16 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Git-commithashen för den driftsatta versionen (se __APP_VERSION__/vite.config.ts) – bara till
+   för att snabbt kunna se om en given enhet laddat om till senaste versionen efter en
+   driftsättning, inte tänkt att vara iögonfallande. */
+.app-version {
+  font-size: 0.7rem;
+  font-weight: 400;
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .app-main {
   flex: 1;
   padding: 16px calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(16px + var(--safe-left));

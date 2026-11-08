@@ -48,7 +48,9 @@ export default function ProjectListPage() {
   return (
     <>
       <header className="app-header">
-        <h1>Rumsa</h1>
+        <h1>
+          Rumsa <span className="app-version">{__APP_VERSION__}</span>
+        </h1>
         <FullscreenButton />
       </header>
       <main className="app-main">

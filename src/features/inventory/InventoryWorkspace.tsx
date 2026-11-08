@@ -32,6 +32,13 @@ import { getLastActiveTab, setLastActiveTab } from './activeTabStore'
 
 type DropIndicator = { category: RoomCategory; index: number }
 
+// Stabila standardvärden för RoomPhotoGallerys pending-delete-props (se InventoryWorkspace) – en
+// egen, återanvänd konstant istället för att skriva `new Set()`/`() => {}` direkt i JSX:en, som
+// annars skulle skapa ett NYTT objekt varje rendering och trigga om RoomPhotoGallerys egna
+// useLiveQuery/filtrering i onödan.
+const EMPTY_PENDING_DELETED_IDS = new Set<string>()
+function noop() {}
+
 /**
  * `category-${category}`s droppzon (se CategoryContent) omsluter HELA materiallistan, som ett
  * sista-utväg-mål för att kunna släppa en tagg i en tom lista. Med bara `closestCenter` konkurrerade
@@ -71,6 +78,8 @@ export function InventoryWorkspace({
   setFunktionField,
   readOnly = false,
   onTagCreated,
+  pendingDeletedPhotoIds,
+  onMarkPhotoDeletePending,
 }: {
   projectId: string
   /** Rummets id – styr om fliken "Bilder" visas alls. Finns bara för ett riktigt rum (inte när
@@ -84,6 +93,11 @@ export function InventoryWorkspace({
   /** Rapporterar id:t för en nyss skapad tagg – låter rumskortet städa bort den igen om man
    * trycker Avbryt istället för Klar. */
   onTagCreated?: (tagId: string) => void
+  /** Rumsfoton man markerat för borttagning i den här öppningen – döljs direkt men raderas inte
+   * ur databasen förrän rumskortet faktiskt sparas (se onMarkPhotoDeletePending och
+   * RoomInventorySheets handleDone/handleCancel). */
+  pendingDeletedPhotoIds?: Set<string>
+  onMarkPhotoDeletePending?: (photoId: string) => void
 }) {
   // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
   // när arbetsytan faktiskt hör till ett riktigt rum.
@@ -319,7 +333,13 @@ export function InventoryWorkspace({
                 </div>
               )
             ) : activeTab === 'bilder' ? (
-              roomId && <RoomPhotoGallery roomId={roomId} />
+              roomId && (
+                <RoomPhotoGallery
+                  roomId={roomId}
+                  pendingDeletedIds={pendingDeletedPhotoIds ?? EMPTY_PENDING_DELETED_IDS}
+                  onMarkDeletePending={onMarkPhotoDeletePending ?? noop}
+                />
+              )
             ) : (
               <CategoryContent
                 key={activeTab}
@@ -522,15 +542,26 @@ function CategoryContent({
 /** Foton knutna till rummet – tagna direkt med kameran (på mobil, via `capture`) eller valda ur
  * galleriet. Oberoende av `readOnly`: ett foto visar det faktiska rummet och ska gå att lägga
  * till/ta bort även när rummet är kopplat till ett typrum (vars data annars är skrivskyddad). */
-function RoomPhotoGallery({ roomId }: { roomId: string }) {
+function RoomPhotoGallery({
+  roomId,
+  pendingDeletedIds,
+  onMarkDeletePending,
+}: {
+  roomId: string
+  /** Foton markerade för borttagning den här öppningen – döljs direkt men raderas inte förrän
+   * rumskortet sparas (se RoomInventorySheets handleDone/handleCancel). */
+  pendingDeletedIds: Set<string>
+  onMarkDeletePending: (photoId: string) => void
+}) {
   const photos = useLiveQuery(() => db.roomPhotos.where('roomId').equals(roomId).sortBy('createdAt'), [roomId])
+  const visiblePhotos = photos?.filter((p) => !pendingDeletedIds.has(p.id))
   return (
     <PhotoGallery
-      photos={photos}
+      photos={visiblePhotos}
       onAdd={(files) =>
         db.roomPhotos.bulkAdd(files.map((file) => ({ id: createId(), roomId, blob: file, createdAt: Date.now() })))
       }
-      onDelete={(photo) => db.roomPhotos.delete(photo.id)}
+      onDelete={(photo) => onMarkDeletePending(photo.id)}
     />
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CameraIcon, CloseIcon } from './icons'
 import { confirmDialog } from './ConfirmDialog'
+import { compressImage } from '../utils/compressImage'
 
 /** Skapar en object-URL för en blob och städar bort den igen vid unmount/bytt blob. Skapandet
  * sker INUTI effekten (inte via useMemo) – annars hinner StrictMode i dev-läge (som avsiktligt
@@ -46,8 +47,12 @@ export function PhotoGallery<T extends { id: string; blob: Blob }>({
     // Kopieras till en egen array DIREKT – input.files är en LEVANDE lista, så att nollställa
     // inputens value (för att kunna välja om samma fil) skulle annars tömma den redan mottagna
     // listan innan onAdd hinner läsa den, och tagningen skulle tyst inte lägga till något alls.
-    const files = Array.from(fileList)
+    const rawFiles = Array.from(fileList)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    // Skalas ner och komprimeras (se compressImage) INNAN de sparas – en orörd kamerabild kan
+    // annars vara flera MB, vilket snabbt blir mycket lagrat data och bidrar till den sortens
+    // minnestryck som tidigare kunde göra kameran/hela fliken opålitlig.
+    const files = await Promise.all(rawFiles.map((file) => compressImage(file)))
     // Frågar bara om det redan finns bilder OCH frågan inte redan ställts den här gången – annars
     // är det första bilden och det finns inget att ersätta. "Avbryt" (eller Escape/bakgrundsklick,
     // som också svarar nej) betyder "lägg till" (den gamla standarden), inte att hela tagningen

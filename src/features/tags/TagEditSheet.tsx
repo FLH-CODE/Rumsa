@@ -37,6 +37,10 @@ export function TagEditSheet({
   const [description, setDescription] = useState(tag?.description ?? '')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // Bilder markerade för borttagning den här öppningen – döljs direkt men raderas inte ur
+  // databasen förrän man trycker Spara (se handleSave). Trycker man Avbryt istället kastas den
+  // här listan bara bort utan att något faktiskt tagits bort.
+  const [pendingDeletedPhotoIds, setPendingDeletedPhotoIds] = useState<Set<string>>(new Set())
 
   // Vilka rum som redan refererar den här taggen – så man ser räckvidden innan man t.ex. tar
   // bort den. Bara relevant för en befintlig tagg, inte när man håller på att skapa en ny.
@@ -88,6 +92,9 @@ export function TagEditSheet({
           })
         }
       })
+      for (const photoId of pendingDeletedPhotoIds) {
+        await db.tagPhotos.delete(photoId)
+      }
       if (!tag) onCreated?.(newId)
       onClose()
     } catch (err) {
@@ -174,7 +181,11 @@ export function TagEditSheet({
         {tag && (
           <div className="field">
             <label>Bilder</label>
-            <TagPhotoGallery tagId={tag.id} />
+            <TagPhotoGallery
+              tagId={tag.id}
+              pendingDeletedIds={pendingDeletedPhotoIds}
+              onMarkDeletePending={(photoId) => setPendingDeletedPhotoIds((prev) => new Set(prev).add(photoId))}
+            />
           </div>
         )}
         {saveError && (
@@ -204,15 +215,24 @@ export function TagEditSheet({
 
 /** Referensfoton knutna till själva taggen (t.ex. hur "Klinker 2" faktiskt ser ut) – delas av alla
  * rum som använder taggen. Bara tillgängligt för en redan sparad tagg. */
-function TagPhotoGallery({ tagId }: { tagId: string }) {
+function TagPhotoGallery({
+  tagId,
+  pendingDeletedIds,
+  onMarkDeletePending,
+}: {
+  tagId: string
+  pendingDeletedIds: Set<string>
+  onMarkDeletePending: (photoId: string) => void
+}) {
   const photos = useLiveQuery(() => db.tagPhotos.where('tagId').equals(tagId).sortBy('createdAt'), [tagId])
+  const visiblePhotos = photos?.filter((p) => !pendingDeletedIds.has(p.id))
   return (
     <PhotoGallery
-      photos={photos}
+      photos={visiblePhotos}
       onAdd={(files) =>
         db.tagPhotos.bulkAdd(files.map((file) => ({ id: createId(), tagId, blob: file, createdAt: Date.now() })))
       }
-      onDelete={(photo) => db.tagPhotos.delete(photo.id)}
+      onDelete={(photo) => onMarkDeletePending(photo.id)}
     />
   )
 }

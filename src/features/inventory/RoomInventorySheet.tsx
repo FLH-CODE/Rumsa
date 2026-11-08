@@ -51,6 +51,17 @@ export function RoomInventorySheet({
   // varna istället för att stänga rakt av – satt av alla ställen som faktiskt ändrar rummets data
   // (se nedan), aldrig av den egna inladdningen från databasen.
   const hasChangesRef = useRef(false)
+  // Rumsfoton markerade för borttagning (via ✕ i galleriet) den här öppningen – döljs direkt i
+  // InventoryWorkspace men raderas inte ur databasen förrän man trycker Klar (se handleDone).
+  // Trycker man Avbryt istället kastas den här listan bara bort utan att något faktiskt tagits
+  // bort, till skillnad från övriga fält (som autosparas löpande oavsett Klar/Avbryt) – en
+  // raderad bild är svårare att "ångra tillbaka" än ett textfält, så den får en egen, striktare
+  // bekräftelse-väg.
+  const [pendingDeletedPhotoIds, setPendingDeletedPhotoIds] = useState<Set<string>>(new Set())
+  const markPhotoDeletePending = (photoId: string) => {
+    hasChangesRef.current = true
+    setPendingDeletedPhotoIds((prev) => new Set(prev).add(photoId))
+  }
 
   useAutosave(
     { roomNumber, roomName },
@@ -98,6 +109,9 @@ export function RoomInventorySheet({
 
   const handleDone = async () => {
     createdTagIdsRef.current.clear()
+    for (const photoId of pendingDeletedPhotoIds) {
+      await db.roomPhotos.delete(photoId)
+    }
     await closeSheet()
   }
 
@@ -417,6 +431,8 @@ export function RoomInventorySheet({
                   hasChangesRef.current = true
                   createdTagIdsRef.current.add(tagId)
                 }}
+                pendingDeletedPhotoIds={pendingDeletedPhotoIds}
+                onMarkPhotoDeletePending={markPhotoDeletePending}
               />
             )}
           </div>

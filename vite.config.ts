@@ -1,12 +1,30 @@
+import { execSync } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// Visas bredvid "Rumsa" på landningssidan (se ProjectListPage) – ett enkelt sätt att se om en
+// given enhet faktiskt har laddat den senast driftsatta versionen eller en äldre, cachad en,
+// utan att behöva gräva i devtools. Git-hashen (inte ett manuellt uppdaterat versionsnummer)
+// så den alltid stämmer mot exakt den koden som faktiskt byggdes, utan att man kan glömma
+// bumpa den. Faller tillbaka på "dev" om git av någon anledning inte går att fråga (t.ex. ett
+// byggsteg utan .git-historik).
+function readAppVersion(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'dev'
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
   // GitHub Pages serverar projektet under /Rumsa/, inte domänroten. Lokal dev-server
   // (npm run dev) ligger kvar på roten så LAN-testning mot iPad/telefon fungerar som vanligt.
   base: command === 'build' ? '/Rumsa/' : '/',
+  define: {
+    __APP_VERSION__: JSON.stringify(readAppVersion()),
+  },
   plugins: [
     react(),
     VitePWA({
