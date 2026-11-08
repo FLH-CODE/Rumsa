@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
-import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, createId, type DrawingPage, type Level, type Room } from '../db'
@@ -46,16 +46,17 @@ export default function DrawingViewerPage() {
   const [renamingLevel, setRenamingLevel] = useState(false)
   const [regeneratingRooms, setRegeneratingRooms] = useState(false)
   const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null)
-  // Separata sensorer för mus och touch (inte en gemensam PointerSensor) – på touch ska ett
-  // vanligt swipe för att SCROLLA sidlistan vara standardbeteendet, inte råka starta en
-  // dra-om-ordning. MouseSensor aktiverar fortfarande direkt efter en kort rörelse (naturligt för
-  // en mus), men TouchSensor kräver att man håller inne fingret en stund (utan att röra sig mer än
-  // `tolerance`) innan draget räknas som avsiktligt – rör man sig mer eller snabbare än så tolkas
-  // det som ett scroll-försök istället, och själva webbläsarens scroll får ta över som vanligt.
-  const pageSortSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-  )
+  // En enda PointerSensor (inte Mouse+TouchSensor) – dnd-kits TouchSensor.setup() installerar en
+  // permanent, icke-passiv touchmove-lyssnare på HELA window (en iOS Safari-specifik hack, se
+  // bibliotekets egen kommentar) så länge den här sidan är monterad, oavsett om man faktiskt drar
+  // något. Det tvingar webbläsarens huvudtråd att synkront utvärdera den vid VARJE fingerrörelse
+  // var som helst på sidan – inklusive över ritningscanvasen (PdfPageCanvas/TransformWrapper) –
+  // vilket misstänks vara orsaken till att både sidscroll/pinch-zoom och sidordning visat sig
+  // opålitliga/hackiga specifikt i Android Chrome (en annan Android-webbläsare verkar tolerera
+  // det bättre). PointerSensor saknar den globala lyssnaren helt. Samma `delay`+`tolerance` gäller
+  // nu även för mus (kort press-och-håll istället för en direkt 8px-rörelse) – en rimlig kompromiss
+  // eftersom appen är mobil-först och det är just pekskärmsbeteendet som behöver fungera pålitligt.
+  const pageSortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }))
 
   const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
 
@@ -482,7 +483,7 @@ function SortableThumb({
         transform: CSS.Transform.toString(transform),
         transition,
         // Normalt pan-y (se .viewer-thumb) så ett vanligt swipe scrollar listan – men väl i ett
-        // AKTIVT drag (efter det långa trycket, se TouchSensor ovan) stängs det av helt. Annars
+        // AKTIVT drag (efter det långa trycket, se pageSortSensors ovan) stängs det av helt. Annars
         // kunde webbläsaren, mitt i det redan påbörjade JS-styrda draget, ändå bestämma sig för
         // att det egentligen var ett scroll-försök och skicka touchcancel istället för touchend –
         // vilket dnd-kit tolkar som ett avbrutet drag och kastar bort den nya positionen helt,
