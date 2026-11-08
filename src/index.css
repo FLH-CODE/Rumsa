@@ -247,6 +247,14 @@ textarea:focus-visible {
   margin-bottom: 0;
 }
 
+/* Samma linje-mellan-kategorier-mönster som rumskortets summeringsläge (se
+   .summary-section:not(:first-child)) – annars flyter kategorierna ihop till en enda lång lista
+   utan någon tydlig gräns mellan t.ex. Golv och Vägg. */
+.tag-section:not(:first-child) {
+  border-top: 1px solid var(--color-border);
+  padding-top: 20px;
+}
+
 .section-heading-text {
   font-size: 1rem;
   margin: 0 0 10px;
@@ -754,6 +762,10 @@ textarea:focus-visible {
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
   z-index: 6;
   transition: transform 0.18s ease;
+  /* Egen, väl avgränsad dra-gest (se handleSidebarTabPointer* i DrawingViewerPage.tsx) – annars
+     kunde webbläsaren tolka ett horisontellt drag precis vid vänsterkanten som en egen gest
+     (t.ex. sidnavigering bakåt) istället för att träffa knappen. */
+  touch-action: none;
 }
 
 .viewer-sidebar-tab.open {
@@ -1972,6 +1984,17 @@ textarea:focus-visible {
 .tag-filter-option.active {
   background: var(--color-bg);
   font-weight: 600;
+}
+
+/* Samma motivering som .summary-material .tag-thumbnail – utan en egen, fast storlek skulle
+   .tag-thumbnail (normalt width:100% av sin smala palette-tag-chip-kolumn) annars sträcka ut sig
+   över nästan hela den här bredare, flexande raden. */
+.tag-filter-option .tag-thumbnail {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-top: 0;
+  margin-left: auto;
 }
 
 .viewer-filter-dot {

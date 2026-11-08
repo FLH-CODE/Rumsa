@@ -82,8 +82,6 @@ export function InventoryWorkspace({
   onTagCreated,
   pendingDeletedPhotoIds,
   onMarkPhotoDeletePending,
-  pendingNoteEdits,
-  onNoteEdit,
 }: {
   projectId: string
   /** Rummets id – styr om fliken "Bilder" visas alls. Finns bara för ett riktigt rum (inte när
@@ -102,13 +100,6 @@ export function InventoryWorkspace({
    * RoomInventorySheets handleDone/handleCancel). */
   pendingDeletedPhotoIds?: Set<string>
   onMarkPhotoDeletePending?: (photoId: string) => void
-  /** Oh-sparade anteckningsändringar (material-id → utkasttext) – visas direkt men skrivs INTE in
-   * i `categories` (som annars autosparas löpande oavsett Klar/Avbryt, se RoomInventorySheet)
-   * förrän rumskortet faktiskt sparas. Saknas helt i typrumsredigeraren (RoomTypesPage), som redan
-   * håller ALL sin data som rent lokalt state tills Klar – där faller anteckningar tillbaka på
-   * samma väg som allt annat (setCategoryEntry, se updateMaterialNote). */
-  pendingNoteEdits?: Map<string, string>
-  onNoteEdit?: (refId: string, note: string) => void
 }) {
   // Bilder är rummets egna (oberoende av ev. typrumskoppling) – men fliken finns bara att välja
   // när arbetsytan faktiskt hör till ett riktigt rum.
@@ -157,16 +148,11 @@ export function InventoryWorkspace({
       return { ...entry, materials }
     })
 
-  const updateMaterialNote = (category: RoomCategory, refId: string, note: string) => {
-    if (onNoteEdit) {
-      onNoteEdit(refId, note)
-      return
-    }
+  const updateMaterialNote = (category: RoomCategory, refId: string, note: string) =>
     setCategoryEntry(category, (entry) => ({
       ...entry,
       materials: entry.materials.map((m) => (m.id === refId ? { ...m, note } : m)),
     }))
-  }
 
   const updateMaterialAntal = (category: RoomCategory, refId: string, antal: number) =>
     setCategoryEntry(category, (entry) => ({
@@ -283,13 +269,7 @@ export function InventoryWorkspace({
         </div>
 
         {showSummary ? (
-          <RoomSummary
-            projectId={projectId}
-            roomId={roomId}
-            categories={categories}
-            funktion={funktion}
-            pendingNoteEdits={pendingNoteEdits}
-          />
+          <RoomSummary projectId={projectId} roomId={roomId} categories={categories} funktion={funktion} />
         ) : (
         <div className="room-workspace-body">
           <div className="room-workspace-main">
@@ -370,7 +350,6 @@ export function InventoryWorkspace({
                 projectId={projectId}
                 readOnly={readOnly}
                 dropIndicatorIndex={dropIndicator?.category === activeTab ? dropIndicator.index : null}
-                pendingNoteEdits={pendingNoteEdits}
                 onRemoveMaterial={(ref, tag) => void removeMaterial(activeTab, ref, tag)}
                 onNoteChange={(refId, note) => updateMaterialNote(activeTab, refId, note)}
                 onAntalChange={(refId, antal) => updateMaterialAntal(activeTab, refId, antal)}
@@ -392,10 +371,20 @@ export function InventoryWorkspace({
       </div>
 
       <DragOverlay>
-        {activeDrag && (
-          <span className="tag-chip drag-preview" style={tagChipStyle(activeDrag.tag?.colorIndex)}>
-            {tagLabel(activeDrag.tag)}
+        {activeDrag?.kind === 'tag' ? (
+          // Samma utseende som chipet i taggpaletten (höger kolumn) – annars såg det ut som en helt
+          // annan, mindre kontroll flög med fingret än den man faktiskt grep tag i.
+          <span className="palette-tag-chip drag-preview" style={{ ...tagChipStyle(activeDrag.tag?.colorIndex), width: 160 }}>
+            <span className="palette-tag-code">{tagLabel(activeDrag.tag)}</span>
+            {activeDrag.tag?.description && <span className="palette-tag-desc">{activeDrag.tag.description}</span>}
+            {activeDrag.tag && <TagThumbnail tagId={activeDrag.tag.id} />}
           </span>
+        ) : (
+          activeDrag && (
+            <span className="tag-chip drag-preview" style={tagChipStyle(activeDrag.tag?.colorIndex)}>
+              {tagLabel(activeDrag.tag)}
+            </span>
+          )
         )}
       </DragOverlay>
 
@@ -469,7 +458,6 @@ function CategoryContent({
   projectId,
   readOnly,
   dropIndicatorIndex,
-  pendingNoteEdits,
   onRemoveMaterial,
   onNoteChange,
   onAntalChange,
@@ -480,7 +468,6 @@ function CategoryContent({
   projectId: string
   readOnly: boolean
   dropIndicatorIndex: number | null
-  pendingNoteEdits?: Map<string, string>
   onRemoveMaterial: (ref: MaterialReference, tag: MaterialTag | undefined) => void
   onNoteChange: (refId: string, note: string) => void
   onAntalChange: (refId: string, antal: number) => void
@@ -530,7 +517,7 @@ function CategoryContent({
               <MaterialEntry
                 index={index}
                 category={category}
-                reference={pendingNoteEdits?.has(ref.id) ? { ...ref, note: pendingNoteEdits.get(ref.id)! } : ref}
+                reference={ref}
                 tag={tagById.get(ref.tagId)}
                 projectId={projectId}
                 readOnly={readOnly}
@@ -791,14 +778,12 @@ function RoomSummary({
   roomId,
   categories,
   funktion,
-  pendingNoteEdits,
 }: {
   projectId: string
   /** Saknas för ett typrum (se InventoryWorkspace) – typrum har inga egna rumsfoton. */
   roomId?: string
   categories: Record<RoomCategory, CategoryEntry>
   funktion: FunktionFields
-  pendingNoteEdits?: Map<string, string>
 }) {
   const tags = useLiveQuery(() => db.materialTags.where('projectId').equals(projectId).toArray(), [projectId])
   const tagById = new Map((tags ?? []).map((t) => [t.id, t]))
@@ -814,15 +799,15 @@ function RoomSummary({
         {(['golv', 'tak', 'vagg'] as const).map((category) => (
           <div key={category} className="summary-category">
             <h4 className="summary-subheading">{CATEGORY_LABEL[category]}</h4>
-            <SummaryCategoryBody entry={categories[category]} tagById={tagById} pendingNoteEdits={pendingNoteEdits} />
+            <SummaryCategoryBody entry={categories[category]} tagById={tagById} />
           </div>
         ))}
       </section>
       <SummarySection heading="Utrustning">
-        <SummaryCategoryBody entry={categories.utrustning} tagById={tagById} pendingNoteEdits={pendingNoteEdits} showAntal />
+        <SummaryCategoryBody entry={categories.utrustning} tagById={tagById} showAntal />
       </SummarySection>
       <SummarySection heading="Övrigt">
-        <SummaryCategoryBody entry={categories.ovrigt} tagById={tagById} pendingNoteEdits={pendingNoteEdits} />
+        <SummaryCategoryBody entry={categories.ovrigt} tagById={tagById} />
       </SummarySection>
       <SummarySection heading="Funktion">
         {funktionEmpty ? (
@@ -884,12 +869,10 @@ function SummarySection({ heading, children }: { heading: string; children: Reac
 function SummaryCategoryBody({
   entry,
   tagById,
-  pendingNoteEdits,
   showAntal,
 }: {
   entry: CategoryEntry
   tagById: Map<string, MaterialTag>
-  pendingNoteEdits?: Map<string, string>
   showAntal?: boolean
 }) {
   const hasOvrigt = entry.ovrigt.trim().length > 0
@@ -900,7 +883,7 @@ function SummaryCategoryBody({
     <div className="inventory-rows">
       {entry.materials.map((ref) => {
         const tag = tagById.get(ref.tagId)
-        const note = pendingNoteEdits?.get(ref.id) ?? ref.note
+        const note = ref.note
         return (
           <div key={ref.id} className="summary-material">
             <span className="tag-chip" style={tagChipStyle(tag?.colorIndex)}>

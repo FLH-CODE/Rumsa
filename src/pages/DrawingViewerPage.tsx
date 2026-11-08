@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
@@ -9,13 +9,12 @@ import { PdfPageCanvas, PDF_MAX_ZOOM } from '../features/pdf/PdfPageCanvas'
 import { TagColorFilterSheet } from '../features/pdf/TagColorFilterSheet'
 import { getViewerPosition, setViewerPosition } from '../features/pdf/viewerPositionStore'
 import { renameOrAssignLevel } from '../features/pdf/levelAssignment'
-import { syncRoomsForPage } from '../features/pdf/syncRooms'
 import { RoomInventorySheet } from '../features/inventory/RoomInventorySheet'
 import { isRecordStarted } from '../features/inventory/recordStatus'
 import { TagsOverviewPanel } from '../features/tags/TagsOverviewPanel'
 import { colorForIndex } from '../features/tags/colorForValue'
 import { FullscreenButton } from '../components/FullscreenButton'
-import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon, ScanRoomsIcon } from '../components/icons'
+import { TagIcon, FilterIcon, HomeIcon, ChevronRightIcon } from '../components/icons'
 import { confirmOnEnterEscape } from '../utils/keyboardShortcuts'
 
 export default function DrawingViewerPage() {
@@ -25,6 +24,13 @@ export default function DrawingViewerPage() {
   // Öppen som standard på bredare skärmar, stängd på mobil där panelen annars tar en stor del
   // av en redan liten yta.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640)
+  // Pekarstart-x för flikens dra-ut/in-gest (se handleSidebarTab*) – null när ingen dragning pågår.
+  const sidebarDragStartXRef = useRef<number | null>(null)
+  // Satt av en FAKTISK dragning (förbi tröskeln) i handleSidebarTabPointerUp, så den efterföljande
+  // syntetiska click-händelsen (webbläsaren skickar alltid en efter pointerup, oavsett hur långt
+  // man flyttat pekaren) inte också togglar läget en gång till – ett vanligt tryck (ingen/liten
+  // rörelse) ska fortfarande gå via onClick som vanligt (bl.a. för tangentbordsåtkomst).
+  const sidebarJustDraggedRef = useRef(false)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [addRoomMode, setAddRoomMode] = useState(false)
   // Rummet vars tagg just nu håller på att flyttas (via ett långt tryck på taggen, se
@@ -41,10 +47,6 @@ export default function DrawingViewerPage() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filterTagId, setFilterTagId] = useState<string | null>(null)
   const [renamingLevel, setRenamingLevel] = useState(false)
-  const [regeneratingRooms, setRegeneratingRooms] = useState(false)
-  const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null)
-
-  const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
 
   const pages = useLiveQuery(
     () => db.drawingPages.where('projectId').equals(projectId ?? '').toArray(),
@@ -187,22 +189,25 @@ export default function DrawingViewerPage() {
 
   const currentLevel = currentPage.levelId ? levelById.get(currentPage.levelId) ?? null : null
 
-  // Söker om efter rumstaggar på den HÄR sidan (samma detektering som vid uppladdning/formatbyte,
-  // se syncRoomsForPage) – t.ex. om man lagt till rum för hand i Revit sen sist. Matchar på
-  // rumsnummer och behåller befintliga rums id, så ett rum som redan är kopplat till ett typrum
-  // eller har ifylld inventeringsdata aldrig ersätts/tappar den kopplingen – bara dess namn och
-  // taggposition uppdateras om det hittas igen, och nya (tidigare osedda) nummer läggs till.
-  const handleAutoGenerateRooms = async () => {
-    if (!doc || !currentPage || !project) return
-    setRegeneratingRooms(true)
-    setRegenerateMessage(null)
-    try {
-      const page = await doc.getPage(currentPage.pageIndex + 1)
-      const count = await syncRoomsForPage(page, currentPage, project.roomNumberPattern)
-      setRegenerateMessage(`${count} rum hittades på sidan.`)
-    } finally {
-      setRegeneratingRooms(false)
-    }
+  const SIDEBAR_DRAG_THRESHOLD = 24
+
+  const handleSidebarTabPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    sidebarDragStartXRef.current = e.clientX
+    // Utan detta hamnar pointerup (och dess e.clientX) på vad som RÅKAR ligga under pekaren vid
+    // släppet (t.ex. ritningen bakom), inte nödvändigtvis på den här knappen – eftersom fliken
+    // själv inte flyttas med under dragningen (bara öppnas/stängs i två fasta lägen, se
+    // .viewer-sidebar-tab.open), skulle ett tillräckligt stort drag annars missa knappen helt.
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handleSidebarTabPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const startX = sidebarDragStartXRef.current
+    sidebarDragStartXRef.current = null
+    if (startX === null) return
+    const deltaX = e.clientX - startX
+    if (Math.abs(deltaX) < SIDEBAR_DRAG_THRESHOLD) return
+    sidebarJustDraggedRef.current = true
+    setSidebarOpen(deltaX > 0)
   }
 
   return (
@@ -248,10 +253,20 @@ export default function DrawingViewerPage() {
       </div>
       {/* Flik i vänsterkanten, som ett bokmärke man drar ut/in – istället för en knapp bland de
          andra, så den tydligt hör ihop med sidlistan den styr. Pilen pekar åt det håll listan
-         öppnas/stängs. */}
+         öppnas/stängs. Går både att trycka på (onClick, bl.a. tangentbordsåtkomst) och att dra i
+         höger/vänster (se handleSidebarTabPointer*) – touch-action: none så webbläsaren inte
+         tolkar draget som något annat (t.ex. en sidnavigerings-gest från vänsterkanten). */}
       <button
         className={`viewer-sidebar-tab${sidebarOpen ? ' open' : ''}`}
-        onClick={() => setSidebarOpen((open) => !open)}
+        onClick={() => {
+          if (sidebarJustDraggedRef.current) {
+            sidebarJustDraggedRef.current = false
+            return
+          }
+          setSidebarOpen((open) => !open)
+        }}
+        onPointerDown={handleSidebarTabPointerDown}
+        onPointerUp={handleSidebarTabPointerUp}
         aria-label={sidebarOpen ? 'Dölj sidöversikt' : 'Visa sidöversikt'}
       >
         <ChevronRightIcon width={18} height={18} />
@@ -278,7 +293,10 @@ export default function DrawingViewerPage() {
           ))}
         </aside>
 
-        <div className="viewer-main" ref={mainRef}>
+        {/* Stänger sidlistan vid klick var som helst till höger om den – en öppen sidlista på
+           mobil tar annars upp plats man troligen vill använda för själva ritningen igen utan att
+           behöva träffa fliken exakt. */}
+        <div className="viewer-main" ref={mainRef} onClick={() => sidebarOpen && setSidebarOpen(false)}>
           {docError && <div className="viewer-empty">Ritningen kunde inte läsas in. {docError.message}</div>}
           {!doc && !docError && <div className="viewer-empty">Läser in ritning…</div>}
           {/* Avmonteras (inte bara göms med CSS) medan rumskortet är öppet ovanpå den – annars är
@@ -356,32 +374,16 @@ export default function DrawingViewerPage() {
                 </button>
               </>
             ) : addRoomMode ? (
-              <button className="btn btn-primary" onClick={() => setAddRoomMode(false)}>
-                Tryck på ritningen…
-              </button>
-            ) : (
               <>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setAddRoomMode(true)
-                    setRegenerateMessage(null)
-                  }}
-                >
-                  + Lägg till rum
+                <span className="viewer-toolbar-hint">Tryck på ritningen…</span>
+                <button className="btn btn-secondary" onClick={() => setAddRoomMode(false)}>
+                  Avbryt
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => void handleAutoGenerateRooms()}
-                  disabled={regeneratingRooms}
-                  title="Sök igenom ritningen efter rumstaggar igen – ersätter aldrig redan hittade rum, hittar bara nya"
-                >
-                  <ScanRoomsIcon width={18} height={18} />
-                  {regeneratingRooms ? 'Hittar rum…' : 'Autogenerera rum'}
-                </button>
-                {regenerateMessage && <span className="viewer-toolbar-hint">{regenerateMessage}</span>}
               </>
+            ) : (
+              <button className="btn btn-secondary" onClick={() => setAddRoomMode(true)}>
+                + Lägg till rum
+              </button>
             )}
           </div>
         </div>

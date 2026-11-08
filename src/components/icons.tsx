@@ -252,16 +252,3 @@ export function CopyOnceIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
-
-/** Förstoringsglas över en liten planritning – symbolen för att automatiskt söka igenom den
- * aktuella ritningssidan efter rumstaggar igen (se "Autogenerera rum" i DrawingViewerPage.tsx). */
-export function ScanRoomsIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <rect x="3" y="4" width="12" height="12" rx="1" />
-      <path d="M6 8h6M6 11h4" />
-      <circle cx="16.5" cy="16.5" r="4" />
-      <path d="M19.6 19.6 22 22" />
-    </svg>
-  )
-}

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, ROOM_CATEGORIES, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory, type RoomType } from '../../db'
+import { db, type CategoryEntry, type InventoryRecord, type Room, type RoomCategory, type RoomType } from '../../db'
 import { useAutosave, type SaveStatus } from '../../hooks/useAutosave'
 import { ensureInventoryRecord, emptyCategories } from './defaultTemplate'
-import { InventoryWorkspace } from './InventoryWorkspace'
+import { InventoryWorkspace, type FunktionFields } from './InventoryWorkspace'
 import { deleteRoomCascade, deleteMaterialTagCascade } from '../data/cascadeDelete'
 import { linkRoomToType, unlinkRoomFromType, applyRoomTypeDataOnce, createRoomTypeFromRoom } from './roomTypeLink'
 import { confirmDialog } from '../../components/ConfirmDialog'
@@ -17,32 +17,14 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
   error: 'Kunde inte spara',
 }
 
+/** Bara "Funktion"-fälten (fria textfält) – dessa autosparas fortfarande löpande som förut.
+ * Materialtaggarna (se `categories`-state nedan) hålls separat och sparas bara vid Klar. */
 type Loaded = {
   recordId: string
-  categories: InventoryRecord['categories']
   antalPersoner: string
   funktionsbeskrivning: string
   dagsljus: string
   storlek: string
-}
-
-/** Lägger de hopsamlade anteckningsutkasten (se pendingNoteEdits) över categories en enda gång,
- * precis innan de faktiskt skrivs till databasen i handleDone – materialets id är unikt över hela
- * rummet (createId(), se InventoryWorkspace), så kategorin behöver inte vara känd här. */
-function applyPendingNotes(
-  categories: InventoryRecord['categories'],
-  pendingNoteEdits: Map<string, string>,
-): InventoryRecord['categories'] {
-  const result = { ...categories }
-  for (const category of ROOM_CATEGORIES) {
-    const entry = result[category]
-    if (!entry.materials.some((m) => pendingNoteEdits.has(m.id))) continue
-    result[category] = {
-      ...entry,
-      materials: entry.materials.map((m) => (pendingNoteEdits.has(m.id) ? { ...m, note: pendingNoteEdits.get(m.id)! } : m)),
-    }
-  }
-  return result
 }
 
 export function RoomInventorySheet({
@@ -73,24 +55,11 @@ export function RoomInventorySheet({
   // Rumsfoton markerade för borttagning (via ✕ i galleriet) den här öppningen – döljs direkt i
   // InventoryWorkspace men raderas inte ur databasen förrän man trycker Klar (se handleDone).
   // Trycker man Avbryt istället kastas den här listan bara bort utan att något faktiskt tagits
-  // bort, till skillnad från övriga fält (som autosparas löpande oavsett Klar/Avbryt) – en
-  // raderad bild är svårare att "ångra tillbaka" än ett textfält, så den får en egen, striktare
-  // bekräftelse-väg.
+  // bort.
   const [pendingDeletedPhotoIds, setPendingDeletedPhotoIds] = useState<Set<string>>(new Set())
   const markPhotoDeletePending = (photoId: string) => {
     hasChangesRef.current = true
     setPendingDeletedPhotoIds((prev) => new Set(prev).add(photoId))
-  }
-
-  // Anteckningar (material-id → utkasttext) hålls HÄR, utanför `loaded`/autosparandet nedan –
-  // till skillnad från rummets övriga fält (som autosparas löpande oavsett Klar/Avbryt, se
-  // kommentaren vid pendingDeletedPhotoIds ovan för samma princip tillämpad på foton) ska en
-  // anteckning bara faktiskt sparas om man trycker Klar (se handleDone). Trycker man Avbryt
-  // kastas den här Map:en bara bort precis som pendingDeletedPhotoIds annars skulle göra.
-  const [pendingNoteEdits, setPendingNoteEdits] = useState<Map<string, string>>(new Map())
-  const setNoteEdit = (refId: string, note: string) => {
-    hasChangesRef.current = true
-    setPendingNoteEdits((prev) => new Map(prev).set(refId, note))
   }
 
   useAutosave(
@@ -142,15 +111,12 @@ export function RoomInventorySheet({
     for (const photoId of pendingDeletedPhotoIds) {
       await db.roomPhotos.delete(photoId)
     }
-    // Skriver anteckningsutkasten direkt till databasen här (inte via setCategoryEntry/loaded,
-    // vars autospar-effekt är debounce:ad 500ms och annars inte skulle hinna köras innan
-    // closeSheet/onClose nedan hinner montera bort kortet) – bara om rummet faktiskt har en egen,
-    // redigerbar post (inte skrivskyddat via ett kopplat typrum).
-    if (record && loaded && !liveRoom.roomTypeId && pendingNoteEdits.size > 0) {
-      await db.inventoryRecords.update(record.id, {
-        categories: applyPendingNotes(loaded.categories, pendingNoteEdits),
-        updatedAt: Date.now(),
-      })
+    // Materialtaggarna (categories) skrivs till databasen först HÄR, inte löpande som rummets
+    // övriga fält – lägger/tar man bort en tagg utan att trycka Klar ska det inte synas i rummet
+    // alls (se setCategoryEntry nedan). Bara om rummet faktiskt har en egen, redigerbar post
+    // (inte skrivskyddat via ett kopplat typrum).
+    if (record && categories && !liveRoom.roomTypeId) {
+      await db.inventoryRecords.update(record.id, { categories, updatedAt: Date.now() })
     }
     await closeSheet()
   }
@@ -189,17 +155,22 @@ export function RoomInventorySheet({
   )
 
   const [loaded, setLoaded] = useState<Loaded | null>(null)
+  // Materialtaggarna hålls som ett eget, rent lokalt utkast – skrivs INTE till databasen förrän
+  // man trycker Klar (se handleDone), till skillnad från `loaded` (Funktion-fälten) ovan som
+  // fortsätter autospara löpande. Lägger/tar man bort en tagg och trycker Avbryt kastas den här
+  // staten bara bort utan att databasen någonsin rörts.
+  const [categories, setCategories] = useState<InventoryRecord['categories'] | null>(null)
 
   useEffect(() => {
     if (record && record.id !== loaded?.recordId) {
       setLoaded({
         recordId: record.id,
-        categories: record.categories,
         antalPersoner: record.antalPersoner,
         funktionsbeskrivning: record.funktionsbeskrivning,
         dagsljus: record.dagsljus,
         storlek: record.storlek,
       })
+      setCategories(record.categories)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record])
@@ -209,7 +180,6 @@ export function RoomInventorySheet({
     async (value) => {
       if (!value || !record || liveRoom.roomTypeId) return
       const patch: Partial<InventoryRecord> = {
-        categories: value.categories,
         antalPersoner: value.antalPersoner,
         funktionsbeskrivning: value.funktionsbeskrivning,
         dagsljus: value.dagsljus,
@@ -228,7 +198,7 @@ export function RoomInventorySheet({
 
   const setCategoryEntry = (category: RoomCategory, updater: (prev: CategoryEntry) => CategoryEntry) => {
     hasChangesRef.current = true
-    setLoaded((prev) => (prev ? { ...prev, categories: { ...prev.categories, [category]: updater(prev.categories[category]) } } : prev))
+    setCategories((prev) => (prev ? { ...prev, [category]: updater(prev[category]) } : prev))
   }
 
   const handleLinkType = async (type: RoomType) => {
@@ -238,7 +208,9 @@ export function RoomInventorySheet({
   }
 
   // Kopierar typrummets data en gång, UTAN att koppla rummet till det – till skillnad från
-  // handleLinkType skapas ingen stående koppling, så rummet kan avvika direkt efteråt.
+  // handleLinkType skapas ingen stående koppling, så rummet kan avvika direkt efteråt. Skriver
+  // (efter en egen bekräftelse om överskrivning) direkt till databasen, precis som innan – en
+  // redan bekräftad överskrivning är inte samma sak som den vanliga tagg-redigeringen ovan.
   const handleApplyTypeOnce = async (type: RoomType) => {
     if (!record) return
     const confirmed = await confirmDialog(
@@ -251,12 +223,12 @@ export function RoomInventorySheet({
     // Se handleUnlinkType nedan – satt direkt istället för nollställd, av samma anledning.
     setLoaded({
       recordId: record.id,
-      categories: type.categories,
       antalPersoner: type.antalPersoner,
       funktionsbeskrivning: type.funktionsbeskrivning,
       dagsljus: type.dagsljus,
       storlek: type.storlek,
     })
+    setCategories(type.categories)
     setShowTypeMenu(false)
   }
 
@@ -272,18 +244,18 @@ export function RoomInventorySheet({
     hasChangesRef.current = true
     await unlinkRoomFromType(room, linkedType)
     // unlinkRoomFromType skriver typrummets data direkt till rummets egen (oförändrade)
-    // inventeringspost – samma post-id som innan, så effekten som annars synkar `loaded` från
-    // `record` (styrd av att post-id:t ändras) triggar inte av sig själv. Sätts direkt till den
-    // data vi just skrev istället för att nollställas och vänta på att liveQuery:n hinner ikapp –
-    // det race:et kunde annars lämna kortet fast på "Laddar…".
+    // inventeringspost – samma post-id som innan, så effekten som annars synkar `loaded`/
+    // `categories` från `record` (styrd av att post-id:t ändras) triggar inte av sig själv. Sätts
+    // direkt till den data vi just skrev istället för att nollställas och vänta på att
+    // liveQuery:n hinner ikapp – det race:et kunde annars lämna kortet fast på "Laddar…".
     setLoaded({
       recordId: record.id,
-      categories: linkedType.categories,
       antalPersoner: linkedType.antalPersoner,
       funktionsbeskrivning: linkedType.funktionsbeskrivning,
       dagsljus: linkedType.dagsljus,
       storlek: linkedType.storlek,
     })
+    setCategories(linkedType.categories)
     setShowTypeMenu(false)
   }
 
@@ -303,15 +275,15 @@ export function RoomInventorySheet({
     }
     await db.inventoryRecords.update(record.id, { ...cleared, updatedAt: Date.now() })
     // Se handleUnlinkType ovan – satt direkt istället för nollställd, av samma anledning.
-    setLoaded({ recordId: record.id, ...cleared })
+    setLoaded({ recordId: record.id, antalPersoner: '', funktionsbeskrivning: '', dagsljus: '', storlek: '' })
+    setCategories(cleared.categories)
   }
 
   // Ett rum kopplat till ett typrum visar alltid typrummets data, aldrig rummets egen (dolda och
   // orörd) inventeringspost, och går inte att redigera eller skapa taggar i direkt.
-  const effective: Loaded | null = linkedType
+  const effectiveCategories: InventoryRecord['categories'] | null = linkedType ? linkedType.categories : categories
+  const effectiveFunktion: FunktionFields | null = linkedType
     ? {
-        recordId: linkedType.id,
-        categories: linkedType.categories,
         antalPersoner: linkedType.antalPersoner,
         funktionsbeskrivning: linkedType.funktionsbeskrivning,
         dagsljus: linkedType.dagsljus,
@@ -451,20 +423,15 @@ export function RoomInventorySheet({
               <p className="field-hint" style={{ color: 'var(--color-danger)' }}>
                 {loadError}
               </p>
-            ) : effective === null ? (
+            ) : effectiveCategories === null || effectiveFunktion === null ? (
               <p className="field-hint">Laddar…</p>
             ) : (
               <InventoryWorkspace
                 projectId={projectId}
                 roomId={room.id}
-                categories={effective.categories}
+                categories={effectiveCategories}
                 setCategoryEntry={setCategoryEntry}
-                funktion={{
-                  antalPersoner: effective.antalPersoner,
-                  funktionsbeskrivning: effective.funktionsbeskrivning,
-                  dagsljus: effective.dagsljus,
-                  storlek: effective.storlek,
-                }}
+                funktion={effectiveFunktion}
                 setFunktionField={(key, value) => setField(key, value)}
                 readOnly={Boolean(linkedType)}
                 onTagCreated={(tagId) => {
@@ -473,8 +440,6 @@ export function RoomInventorySheet({
                 }}
                 pendingDeletedPhotoIds={pendingDeletedPhotoIds}
                 onMarkPhotoDeletePending={markPhotoDeletePending}
-                pendingNoteEdits={pendingNoteEdits}
-                onNoteEdit={setNoteEdit}
               />
             )}
           </div>
