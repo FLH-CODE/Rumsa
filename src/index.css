@@ -770,22 +770,9 @@ textarea:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  /* pan-y (inte none) – ett vanligt swipe för att SCROLLA sidlistan ska vara standardbeteendet.
-     TouchSensor (se pageSortSensors i DrawingViewerPage) kräver numera ett kort, stillastående
-     tryck innan ett drag räknas som avsiktligt, och avbryter sig själv i JS om man rör sig mer än
-     toleransen – den avbrytningen hinner dock aldrig ske om touch-action redan blockerat själva
-     scroll-gesten på compositor-nivå innan JS ens får se den. */
-  touch-action: pan-y;
   /* iOS Safari visar annars sin egen inbyggda meny (dela/kopiera/spara bilden) på ett långt tryck
-     på en <img> – helt oberoende av dnd-kits egna draghantering, eftersom det är en
-     OS-/WebKit-nivå-gest som inte går att stoppa med JS (preventDefault på contextmenu, som
-     dnd-kit redan gör, räcker inte). Den menyn "vann" alltid racet mot det egna, avsiktligt
-     fördröjda draget, så ett långt tryck startade aldrig en omdragning alls på iPhone. */
+     på en <img> – en OS-/WebKit-nivå-gest som inte går att stoppa med bara preventDefault i JS. */
   -webkit-touch-callout: none;
-}
-
-.viewer-thumb.dragging {
-  opacity: 0.5;
 }
 
 .viewer-thumb img {
