@@ -23,6 +23,7 @@ import { RoomPerspectiveNav } from './RoomPerspectiveNav'
 import { TagEditSheet } from '../tags/TagEditSheet'
 import { tagLabel } from '../tags/tagLabel'
 import { tagChipStyle } from '../tags/colorForValue'
+import { TagThumbnail } from '../tags/TagThumbnail'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { blurOnEnterEscape, blurOnEscape } from '../../utils/keyboardShortcuts'
 import { GripIcon, SummaryIcon } from '../../components/icons'
@@ -637,6 +638,7 @@ function MaterialEntry({
         <span className="palette-tag-chip" style={tagChipStyle(tag?.colorIndex)}>
           <span className="palette-tag-code">{tagLabel(tag)}</span>
           {tag?.description && <span className="palette-tag-desc">{tag.description}</span>}
+          {tag && <TagThumbnail tagId={tag.id} />}
         </span>
         {!readOnly && (
           <button type="button" className="material-entry-remove" onClick={onRemove} aria-label={`Ta bort ${tagLabel(tag)}`}>
@@ -744,6 +746,7 @@ function PaletteTag({ tag, onEdit }: { tag: MaterialTag; onEdit: () => void }) {
       <span className="palette-tag-chip" style={tagChipStyle(tag.colorIndex)}>
         <span className="palette-tag-code">{tag.code}</span>
         {tag.description && <span className="palette-tag-desc">{tag.description}</span>}
+        <TagThumbnail tagId={tag.id} />
       </span>
     </button>
   )

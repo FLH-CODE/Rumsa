@@ -1,22 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { CameraIcon, CloseIcon } from './icons'
 import { confirmDialog } from './ConfirmDialog'
 import { compressImage } from '../utils/compressImage'
-
-/** Skapar en object-URL för en blob och städar bort den igen vid unmount/bytt blob. Skapandet
- * sker INUTI effekten (inte via useMemo) – annars hinner StrictMode i dev-läge (som avsiktligt
- * kör en effekts cleanup en extra gång direkt efter montering, för att fånga den här typen av
- * buggar) återkalla url:en innan bilden hunnit visas, vilket gjorde den trasig redan vid första
- * visningen. */
-function useObjectUrl(blob: Blob): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(blob)
-    setUrl(objectUrl)
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [blob])
-  return url
-}
+import { useObjectUrl } from '../hooks/useObjectUrl'
 
 /**
  * Delat galleri för foton tagna med kameran (eller valda ur bildrullen) – används både för foton

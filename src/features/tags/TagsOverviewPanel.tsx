@@ -9,6 +9,7 @@ import { CATEGORY_LABEL } from '../inventory/categories'
 import { confirmDialog } from '../../components/ConfirmDialog'
 import { FullscreenButton } from '../../components/FullscreenButton'
 import { TagEditSheet } from './TagEditSheet'
+import { TagThumbnail } from './TagThumbnail'
 
 /**
  * Översikt över projektets tagg-bibliotek – en sektion per fast kategori (Golv, Vägg, Tak,
@@ -86,6 +87,7 @@ export function TagsOverviewPanel({
                             {tagLabel(tag)}
                           </span>
                           <span className="field-hint">{tag.description || 'Ingen beskrivning än'}</span>
+                          <TagThumbnail tagId={tag.id} />
                         </span>
                         {roomCount > 0 && <span className="tag-card-room-count">{roomCount} rum</span>}
                       </button>
