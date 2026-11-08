@@ -38,12 +38,17 @@ body {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  /* "manipulation" (testat i en tidigare version) visade sig TILLÅTA pinch-zoom – raka motsatsen
-     till vad som önskas här – utan att faktiskt lösa den separata enfingers-scrollbuggen den var
-     tänkt att åtgärda. Tillbaka till pan-x pan-y, som blockerar både pinch- och
-     dubbeltryck-zoom. Ritningsvisaren tar över sin egen pinch/pan-hantering (se .viewer-main
-     .react-transform-wrapper), så den påverkas inte av detta. */
-  touch-action: pan-x pan-y;
+  /* INGEN touch-action här längre. Både "manipulation" och "pan-x pan-y" har testats i tidigare
+     versioner utan att lösa enfingers-scrollbuggen på Android Chrome – bytet mellan dem gjorde
+     ingen skillnad, bara VÄRDET ändrades, aldrig om egenskapen fanns alls. Kvarstående misstanke:
+     Chrome implementerar touch-action's ancestor-intersection strikt enligt spec (en explicit
+     touch-action-regel på html/body kan då göra webbläsaren osäker på om scroll är tillåtet och
+     i värsta fall svälja hela gesten), medan andra Android-webbläsare är mer överseende/buggiga
+     och scrollar ändå – vilket stämmer med att just "standardwebbläsaren" fungerat hela tiden.
+     Pinch-/dubbeltryck-zoom stängs redan av via viewport-metans user-scalable=no/maximum-scale
+     (se index.html) – den täcker Chrome oavsett, även utan denna CSS-regel. Ritningsvisaren tar
+     över sin egen pinch/pan-hantering (se .viewer-main .react-transform-wrapper) och påverkas
+     inte av detta. */
 }
 
 body {
