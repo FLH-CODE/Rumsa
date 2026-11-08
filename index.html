@@ -3,10 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
+    <!-- INTE maximum-scale=1.0/user-scalable=no – på Android, i kombination med vissa
+         OS-inställningar för förstoring/tillgänglighet (t.ex. "Förstoring" i Android), gör det att
+         Chrome kräver en TVÅFINGERS-gest för att panorera istället för en vanlig
+         enfingers-scroll, eftersom webbläsaren annars tappar den enfingers-gest den annars hade
+         gett till just den tillgänglighetsfunktionen. touch-action: manipulation (se index.css)
+         sköter redan att dubbeltryck-zoom är avstängt, utan den bieffekten. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#164e63" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -313,7 +313,16 @@ export default function DrawingViewerPage() {
         <div className="viewer-main" ref={mainRef}>
           {docError && <div className="viewer-empty">Ritningen kunde inte läsas in. {docError.message}</div>}
           {!doc && !docError && <div className="viewer-empty">Läser in ritning…</div>}
-          {doc && mainSize && (
+          {/* Avmonteras (inte bara göms med CSS) medan rumskortet är öppet ovanpå den – annars är
+             PDF-canvasen (kan vara flera hundra MB på en stor/detaljerad ritning i hög upplösning,
+             se MAX_BACKING_AREA i PdfPageCanvas) ändå kvar i minnet hela tiden man har kortet
+             öppet, trots att den inte syns. Kombinerat med kamerans eget minnesbehov kunde det
+             räcka för att webbläsaren skulle återställa/ladda om hela fliken medan man tog ett
+             foto – vilket i praktiken tystade bort hela den pågående rumskorts-sessionen (och
+             därmed fotot man precis tagit) utan något synligt felmeddelande. pan/zoom-läget är
+             sparat per sida (se viewerPosition/setViewerPosition) så det återställs exakt när
+             canvasen monteras igen efter att kortet stängts. */}
+          {doc && mainSize && !selectedRoom && (
             <TransformWrapper
               key={currentPage.id}
               // Skala 1 = ritningen anpassad efter tillgängligt utrymme (se PdfPageCanvas), så
@@ -455,7 +464,17 @@ function SortableThumb({
   return (
     <button
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        // Normalt pan-y (se .viewer-thumb) så ett vanligt swipe scrollar listan – men väl i ett
+        // AKTIVT drag (efter det långa trycket, se TouchSensor ovan) stängs det av helt. Annars
+        // kunde webbläsaren, mitt i det redan påbörjade JS-styrda draget, ändå bestämma sig för
+        // att det egentligen var ett scroll-försök och skicka touchcancel istället för touchend –
+        // vilket dnd-kit tolkar som ett avbrutet drag och kastar bort den nya positionen helt,
+        // precis som om draget aldrig hade släppts.
+        touchAction: isDragging ? 'none' : undefined,
+      }}
       className={`viewer-thumb${active ? ' active' : ''}${isDragging ? ' dragging' : ''}`}
       onClick={onSelect}
       {...attributes}
