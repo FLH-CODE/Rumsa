@@ -410,6 +410,10 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Reserverar plats åt scrollbaren (se * ::-webkit-scrollbar i toppen av filen) så den inte
+     hamnar rakt ovanpå taggarnas egna bilder (se .tag-thumbnail i .tag-card-text), som annars
+     sträcker sig hela vägen ut till den här rutans egen högerkant. */
+  padding-right: 14px;
 }
 
 .tags-overview-sheet,
@@ -448,6 +452,9 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Samma motivering som .tags-overview-sheet-body – utan den hamnar scrollbaren rakt ovanpå
+     taggarnas bilder (se .tag-filter-option .tag-thumbnail), som sitter flush mot höger kant. */
+  padding-right: 14px;
 }
 
 .modal-sheet {
@@ -1607,6 +1614,9 @@ textarea:focus-visible {
   gap: 2px;
   max-height: 60vh;
   overflow-y: auto;
+  /* Reserverar plats åt scrollbaren – annars hamnar den rakt ovanpå taggarnas egna bilder (se
+     .tag-thumbnail), som annars sträcker sig hela vägen ut till kolumnens egen högerkant. */
+  padding-right: 10px;
   /* Säkerhetsnät: taggtextens egen word-break (se .palette-tag-code/.palette-tag-desc) ska göra
      det onödigt, men utan detta kunde en enda obruten lång textsträng ändå tvinga fram en
      horisontell scrollbar här – som i sin tur, eftersom .room-workspace-body har overflow-x:auto,
