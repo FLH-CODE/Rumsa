@@ -168,8 +168,22 @@ export default function DrawingViewerPage() {
     const newIndex = sortedPages.findIndex((p) => p.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
     const reordered = arrayMove(sortedPages, oldIndex, newIndex)
+    // .order avgör bara ordningen INOM samma nivågrupp – nivån själv avgör gruppering/ordning
+    // FÖRST (se sortPages, "högre plan överst"). Att skriva ETT enda globalt löpnummer över HELA
+    // den (nivågrupperade) listan gjorde att en omdragning av en sida mellan två olika nivåers
+    // sidor osynligt "studsade tillbaka" nästa gång listan sorterades om – nivågrupperingen tog
+    // ändå över igen, så det globala löpnumret aldrig fick synas i rätt ordning. Räknar istället
+    // om varje sidas index LOKALT inom sin egen nivågrupp (null/"Ej tilldelad" räknas som en egen
+    // grupp), baserat på var den hamnade i den nya, dragna ordningen.
+    const nextIndexByLevel = new Map<string, number>()
+    const updates = reordered.map((page) => {
+      const key = page.levelId ?? ''
+      const index = nextIndexByLevel.get(key) ?? 0
+      nextIndexByLevel.set(key, index + 1)
+      return { id: page.id, order: index }
+    })
     await db.transaction('rw', db.drawingPages, async () => {
-      await Promise.all(reordered.map((page, index) => db.drawingPages.update(page.id, { order: index })))
+      await Promise.all(updates.map(({ id, order }) => db.drawingPages.update(id, { order })))
     })
   }
 

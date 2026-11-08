@@ -32,13 +32,12 @@ body {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  /* "manipulation" (inte "pan-x pan-y") – båda blockerar dubbeltryck-zoom, så appen känns ändå
-     inte som en webbsida, men "manipulation" är webbläsarnas mer väletablerade, mer kompatibla
-     standardval för "normal pankning tillåten" och har inte samma historik av udda
-     scroll-strypningar på vissa mobila webbläsare som en explicit pan-x+pan-y-kombination kan ha.
-     Ritningsvisaren tar över sin egen pinch/pan-hantering (se .viewer-main
+  /* "manipulation" (testat i en tidigare version) visade sig TILLÅTA pinch-zoom – raka motsatsen
+     till vad som önskas här – utan att faktiskt lösa den separata enfingers-scrollbuggen den var
+     tänkt att åtgärda. Tillbaka till pan-x pan-y, som blockerar både pinch- och
+     dubbeltryck-zoom. Ritningsvisaren tar över sin egen pinch/pan-hantering (se .viewer-main
      .react-transform-wrapper), så den påverkas inte av detta. */
-  touch-action: manipulation;
+  touch-action: pan-x pan-y;
 }
 
 body {
