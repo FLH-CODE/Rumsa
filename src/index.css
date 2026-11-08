@@ -28,27 +28,28 @@ html,
 body {
   margin: 0;
   padding: 0;
-  /* "none" (testat tidigare) har en känd bugg på vissa Android Chrome-versioner där det, i
-     kombination med att sidan ofta redan STÅR högst upp (scrollTop 0) när man börjar dra, kan
-     svälja hela scroll-FÖRSÖKET – inte bara den oönskade studs-/pull-to-refresh-effekten det är
-     till för att stänga av. "contain" är Googles egen rekommendation för att stänga av
-     pull-to-refresh på Android PWA:er utan den bieffekten – stoppar fortfarande att scrollen
-     "läcker" vidare till webbläsarens egen pull-to-refresh, bara mindre aggressivt. */
-  overscroll-behavior-y: contain;
+  /* INGEN overscroll-behavior-y här längre. Både "none" och "contain" (testade i tidigare
+     versioner) har nu uteslutits som orsak till enfingers-scrollbuggen på Android Chrome
+     (projektsidan kräver fortfarande 2 fingrar med "contain") – kvar står misstanken att EGENSKAPEN
+     SJÄLV, oavsett värde, kan få just den här Chrome-versionen att bli osäker på om en
+     enfingersgest är en scroll eller en overscroll/pull-to-refresh-gest och vänta på bekräftelse
+     (en andra pekpunkt) innan den agerar. Innebär att pull-to-refresh-studsen/den oönskade
+     "gummibandseffekten" kan vara tillbaka i standalone-läge – om det stör mer än
+     2-fingers-scrollbuggen får "contain" återinföras och en annan lösning sökas (t.ex. att bara
+     omsluta den THE scrollbara ytan, inte hela html/body). */
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
   /* INGEN touch-action här längre. Både "manipulation" och "pan-x pan-y" har testats i tidigare
      versioner utan att lösa enfingers-scrollbuggen på Android Chrome – bytet mellan dem gjorde
-     ingen skillnad, bara VÄRDET ändrades, aldrig om egenskapen fanns alls. Kvarstående misstanke:
-     Chrome implementerar touch-action's ancestor-intersection strikt enligt spec (en explicit
-     touch-action-regel på html/body kan då göra webbläsaren osäker på om scroll är tillåtet och
-     i värsta fall svälja hela gesten), medan andra Android-webbläsare är mer överseende/buggiga
-     och scrollar ändå – vilket stämmer med att just "standardwebbläsaren" fungerat hela tiden.
-     Pinch-/dubbeltryck-zoom stängs redan av via viewport-metans user-scalable=no/maximum-scale
-     (se index.html) – den täcker Chrome oavsett, även utan denna CSS-regel. Ritningsvisaren tar
-     över sin egen pinch/pan-hantering (se .viewer-main .react-transform-wrapper) och påverkas
-     inte av detta. */
+     ingen skillnad, bara VÄRDET ändrades, aldrig om egenskapen fanns alls. Samma sak gäller nu
+     touch-action rakt över hela appen (html/body, globala button-regeln, och alla återstående
+     touch-action: none är avgränsade till ritningsvisarens canvas/drag-handtag, inget av det
+     träffar projektsidan) – ändå kvarstår 2-fingersbuggen där, vilket utesluter touch-action
+     helt som orsak. Pinch-/dubbeltryck-zoom stängs redan av via viewport-metans
+     user-scalable=no/maximum-scale (se index.html) – den täcker Chrome oavsett, även utan denna
+     CSS-regel. Ritningsvisaren tar över sin egen pinch/pan-hantering (se .viewer-main
+     .react-transform-wrapper) och påverkas inte av detta. */
 }
 
 body {
