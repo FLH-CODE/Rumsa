@@ -1,25 +1,39 @@
 import { registerSW } from 'virtual:pwa-register'
 
 /**
- * Registrerar service workern och kollar aktivt efter en ny version med jämna mellanrum –
- * annars upptäcker en flik som hållits öppen över flera driftsättningar aldrig en uppdatering
- * förrän den råkar laddas om helt (webbläsaren kollar annars bara vid sidladdning). skipWaiting +
- * clientsClaim (satt i vite.config.ts) gör att en hittad uppdatering aktiveras direkt utan att
- * fråga, så den här kollen är det som faktiskt får den att slå igenom i tid.
+ * Registrerar service workern. Med registerType:"autoUpdate" (se vite.config.ts) laddar
+ * vite-plugin-pwa redan om sidan HELT AUTOMATISKT så fort en ny version faktiskt upptäckts och
+ * aktiverats (ingen egen kod behövs för själva omladdningen). Men "upptäckts" görs annars bara av
+ * WEBBLÄSAREN SJÄLV vid en ny sidnavigering – håller man samma flik öppen (precis vad en SPA
+ * uppmuntrar) kollas det annars aldrig igen, oavsett hur ofta.
+ *
+ * Den tidigare versionen av den här filen anropade registerSW():s egen returnerade funktion
+ * (updateSW/updateServiceWorker) i en loop – men den funktionen är, i "autoUpdate"-läge
+ * SPECIFIKT, bara ett no-op (den gör bara något i det ALTERNATIVA "prompt"-läget, se
+ * node_modules/vite-plugin-pwa/dist/client/build/register.js). Hela den tidigare "kollen" (var
+ * 2:a minut + vid återkomst till fliken) gjorde alltså ABSOLUT INGENTING – precis den sortens
+ * flik som aldrig märker en ny version, som kommentaren ovan varnade för, var exakt vad den
+ * bugiga koden faktiskt producerade. Fångar nu istället upp själva ServiceWorkerRegistration via
+ * onRegisteredSW och anropar dess EGNA .update()-metod direkt, vilket FAKTISKT tvingar fram en
+ * ny koll mot servern – sedan tar autoUpdate-lägets inbyggda omladdning över om något nytt hittas.
  */
-const updateSW = registerSW({ immediate: true })
+let registration: ServiceWorkerRegistration | undefined
 
-// En timme var för lång under en period med täta driftsättningar – en flik man öppnat tidigare
-// samma dag kunde då testas mot en (eller flera!) gamla versioner utan att man märkte det.
-// Kollar nu mycket oftare, OCH direkt varje gång man kommer tillbaka till appen (t.ex. efter att
-// ha bytt till en annan app och tillbaka på mobilen) – det är ändå den naturliga punkten där man
-// faktiskt börjar testa något, inte mitt i en pågående session.
+registerSW({
+  immediate: true,
+  onRegisteredSW: (_swUrl, reg) => {
+    registration = reg
+  },
+})
+
 const CHECK_INTERVAL_MS = 2 * 60 * 1000
 
-setInterval(() => {
-  void updateSW()
-}, CHECK_INTERVAL_MS)
+function checkForUpdate() {
+  void registration?.update()
+}
+
+setInterval(checkForUpdate, CHECK_INTERVAL_MS)
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') void updateSW()
+  if (document.visibilityState === 'visible') checkForUpdate()
 })
