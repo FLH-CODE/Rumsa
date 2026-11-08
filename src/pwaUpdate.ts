@@ -9,8 +9,17 @@ import { registerSW } from 'virtual:pwa-register'
  */
 const updateSW = registerSW({ immediate: true })
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1000
+// En timme var för lång under en period med täta driftsättningar – en flik man öppnat tidigare
+// samma dag kunde då testas mot en (eller flera!) gamla versioner utan att man märkte det.
+// Kollar nu mycket oftare, OCH direkt varje gång man kommer tillbaka till appen (t.ex. efter att
+// ha bytt till en annan app och tillbaka på mobilen) – det är ändå den naturliga punkten där man
+// faktiskt börjar testa något, inte mitt i en pågående session.
+const CHECK_INTERVAL_MS = 2 * 60 * 1000
 
 setInterval(() => {
   void updateSW()
 }, CHECK_INTERVAL_MS)
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void updateSW()
+})

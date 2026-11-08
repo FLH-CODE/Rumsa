@@ -7,6 +7,13 @@ import { useEffect, useRef, useState } from 'react'
  * också, så knappens ikon/etikett stämmer om man lämnar helskärm med Esc/systemets tillbaka.
  */
 export function useFullscreen() {
+  // iOS Safari saknar helt stöd för Fullscreen API på vanlig sidinnehåll i en öppen flik (bara
+  // <video> kan bli helskärm där) – `document.fullscreenEnabled` är false då. Ett tryck på
+  // knappen gjorde (och kan aldrig göra) något synligt alls i det läget, vilket bara kändes
+  // trasigt; döljer den istället (se FullscreenButton) så det inte ser ut som en bugg. Appen
+  // tillagd på hemskärmen (manifestets display:"fullscreen") döljer redan adressfältet oavsett,
+  // så den riktiga lösningen för iPhone är ändå att lägga till genvägen, inte den här knappen.
+  const isSupported = typeof document.fullscreenEnabled === 'boolean' ? document.fullscreenEnabled : true
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
   // Minns om man VAR i helskärm precis innan sidan doldes – t.ex. att öppna kameran för att ta
   // ett foto (via <input capture>) tvingar webbläsaren ur helskärm automatiskt, och den återgår
@@ -76,5 +83,5 @@ export function useFullscreen() {
     }
   }
 
-  return { isFullscreen, toggle }
+  return { isFullscreen, toggle, isSupported }
 }
